@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<?fileVersion 4.0.0?>
+<cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
+  <storageModule moduleId="org.eclipse.cdt.core.settings">
+    <cconfiguration id="vehicle.solution.source">
+      <storageModule buildSystemId="org.eclipse.cdt.core.defaultConfigDataProvider" id="vehicle.solution.source" moduleId="org.eclipse.cdt.core.settings" name="Source Build">
+        <externalSettings/>
+        <extensions>
+          <extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
+          <extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+          <extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+          <extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+        </extensions>
+      </storageModule>
+      <storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
+    </cconfiguration>
+  </storageModule>
+  <storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
+  <storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
+</cproject>

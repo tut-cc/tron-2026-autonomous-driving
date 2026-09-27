@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RA8P1 Control API</title><link rel="stylesheet" href="/style.css"></head>
+<body><main><h1>Control API 通信試験</h1><p>Controller未接続のため、操作値を送っても車両状態は初期値のままです。</p>
+<label>クライアントモード <select id="client_mode"><option>MANUAL</option><option>AUTO</option><option>AUTO_ABORT</option><option>MANUAL_ABORT</option></select></label>
+<label>モード要求 <select id="mode_request"><option>NONE</option><option>MANUAL</option><option>AUTO</option></select></label>
+<label>Throttle <input id="throttle" type="range" min="-1" max="1" step="0.01" value="0"><output id="throttle_value">0</output></label>
+<label>Steering <input id="steering" type="range" min="-1" max="1" step="0.01" value="0"><output id="steering_value">0</output></label>
+<label><input id="deadman" type="checkbox">明示deadman (押下中だけ手動走行許可)</label>
+<label><input id="manual_abort_request" type="checkbox">手動中断要求</label><label><input id="reset_abort_request" type="checkbox">中断解除要求</label>
+<button id="estop" type="button">ESTOP</button><button id="toggle">通信開始</button><p id="status" role="status">停止中</p><pre id="state">未受信</pre></main><script src="/app.js"></script></body></html>

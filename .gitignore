@@ -1,0 +1,18 @@
+# Build outputs: regenerate with `MAKE_EVIDENCE.cmd` (or tools/build.py).
+# Build/*.lld and Build/bsp_linker_info.h are linker inputs and ARE tracked.
+/CPU0/Build/obj/
+/CPU1/Build/obj/
+/CPU*/Build/*.elf
+/CPU*/Build/*.srec
+/CPU*/Build/*.map
+/CPU*/Build/link.rsp
+/CPU*/Build/build_profile.json
+/CPU*/Build/build_metadata.json
+# Debugger / IDE / Python leftovers (tools/verify.py rejects these in the delivery)
+JLinkLog.log
+__pycache__/
+*.pyc
+.metadata/
+# Not redistributed until its origin/license is confirmed (docs/LICENSE_SURVEY.md).
+# Copy it from the original EK-RA8P1 camera sample project before building CPU0.
+/CPU0/src/prebuilt/camera_sensor.o

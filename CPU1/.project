@@ -1,0 +1,63 @@
+<?xml version='1.0' encoding='utf8'?>
+<projectDescription>
+  <name>ra8p1_vision_CPU1</name>
+  <comment>Source-built RA8P1 dual-core integration; see README_JA.md</comment>
+  <projects />
+  <buildSpec>
+    <buildCommand>
+      <name>org.eclipse.cdt.make.core.makeBuilder</name>
+      <arguments>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.build.command</key>
+          <value>python</value>
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.build.arguments</key>
+          <value>../tools/build.py --core CPU1 --profile vehicle-output --allow-physical-output</value>
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.useDefaultBuildCmd</key>
+          <value>false</value>
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.enableAutoBuild</key>
+          <value>false</value>
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.enableFullBuild</key>
+          <value>true</value>
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.enableIncrementalBuild</key>
+          <value>true</value>
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.build.target.inc</key>
+          <value />
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.build.target.auto</key>
+          <value />
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.build.target.clean</key>
+          <value />
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.enableCleanBuild</key>
+          <value>false</value>
+        </dictionary>
+        <dictionary>
+          <key>org.eclipse.cdt.make.core.stopOnError</key>
+          <value>true</value>
+        </dictionary>
+      </arguments>
+    </buildCommand>
+  </buildSpec>
+  <natures>
+    <nature>org.eclipse.cdt.core.cnature</nature>
+    <nature>org.eclipse.cdt.core.ccnature</nature>
+    <nature>org.eclipse.cdt.make.core.makeNature</nature>
+    <nature>org.eclipse.cdt.make.core.ScannerConfigNature</nature>
+  </natures>
+</projectDescription>

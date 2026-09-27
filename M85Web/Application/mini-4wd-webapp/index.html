@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>ミニ四駆コントローラー</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-state="DISCONNECTED">
+  <!-- 車載カメラ映像は現行オンボードHTTP実装に含まれないため、404を発生させない。 -->
+  <div id="camera" role="img" aria-label="車載カメラ映像は未提供">
+    <strong>車載カメラ映像</strong>
+    <span>/video_feed は現行ファームウェアでは未提供</span>
+  </div>
+
+  <!-- ラジコン式操作：左手＝前進（画面左下）、右手＝左右（画面右側）。
+       両方を同時に押せる。後退は安全上ない。 -->
+  <div id="pad-throttle" class="pad pad-throttle" role="group" aria-label="前進（左手）">
+    <button type="button" id="pad-forward" class="pad-btn pad-forward" data-dir="up" aria-label="前進">
+      <svg viewBox="0 0 24 24" width="36" height="36"><path d="M12 5 L4 17 L20 17 Z" fill="currentColor"/></svg>
+    </button>
+  </div>
+  <div id="pad-steer" class="pad pad-steer" role="group" aria-label="左右（右手）">
+    <button type="button" id="pad-left" class="pad-btn pad-left" data-dir="left" aria-label="左">
+      <svg viewBox="0 0 24 24" width="36" height="36"><path d="M5 12 L17 4 L17 20 Z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" id="pad-right" class="pad-btn pad-right" data-dir="right" aria-label="右">
+      <svg viewBox="0 0 24 24" width="36" height="36"><path d="M19 12 L7 4 L7 20 Z" fill="currentColor"/></svg>
+    </button>
+  </div>
+
+  <!-- HUD ヘッダー (状態 / 距離 / INFO) -->
+  <header class="top-bar">
+    <div id="status-badge" class="badge" title="トリプルタップでレイアウト調整UI">
+      <span class="status-dot"></span>
+      <span id="status-text">未接続</span>
+    </div>
+    <div id="distance-card" class="badge">
+      <span class="label">前方距離</span>
+      <span id="distance-val" class="val">--</span>
+      <span class="unit">mm</span>
+    </div>
+    <button popovertarget="info-modal" class="btn btn-sm">INFO</button>
+  </header>
+
+  <div id="alert-banner" popover="manual">エラー通知</div>
+
+  <!-- 操作フッター (中断理由 / モード切替 / ABORT) -->
+  <footer class="bottom-bar">
+    <div id="stop-reason">中断理由: <span id="stop-reason-text">NONE</span></div>
+    <div class="action-row">
+      <button id="btn-mode" class="action-btn">MANUAL MODE</button>
+      <button id="btn-stop" class="action-btn btn-stop">ABORT</button>
+      <button id="btn-estop" class="action-btn btn-estop" type="button">ESTOP</button>
+    </div>
+  </footer>
+
+  <!-- TOR オーバーレイ -->
+  <div id="tor-overlay" class="overlay">
+    <div class="card tor-card">
+      <h2>TAKE OVER REQUEST</h2>
+      <p>自動運転の継続が困難です。手動操作へ引き継いでください。</p>
+      <div class="timer">残り時間: <span id="tor-countdown">3.0</span> 秒</div>
+      <button id="btn-takeover" class="btn btn-lg">手動操作に切り替える</button>
+    </div>
+  </div>
+
+  <!-- 切断オーバーレイ -->
+  <div id="disconnected-overlay" class="overlay">
+    <div class="card center">
+      <div class="spinner"></div>
+      <h2>DISCONNECTED</h2>
+      <p>サーバーに接続しています...</p>
+      <p class="muted">マイコンまたは mock_server.py の起動を確認してください</p>
+    </div>
+  </div>
+
+  <!-- INFO モーダル -->
+  <div id="info-modal" popover class="modal-card">
+    <h2>操作・機能ガイド</h2>
+    <p class="muted">ミニ四駆コントローラー</p>
+    <ul>
+      <li><strong>走行操作（ラジコン式）:</strong> 左手で前進ボタン（画面左下）、右手で ◀ / ▶（画面右）。同時に押すと曲がりながら進む。キーボードは ↑ / W で前進、← / → または A / D で左右</li>
+      <li><strong>自動運転:</strong> AUTO MODE ボタンで切替要求</li>
+      <li><strong>手動停止:</strong> ABORT ボタンで即時停止</li>
+      <li><strong>後退:</strong> 安全上、後退操作は提供していません</li>
+      <li><strong>UI調整デバッグ:</strong> <code>Ctrl+Shift+D</code> / <code>\`</code> / <code>F2</code> またはステータスバッジを3回タップ</li>
+    </ul>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+# Store every file byte-for-byte: MANIFEST.json / verify.py hash sources, and
+# CRLF/LF conversion by git (core.autocrlf) would change those hashes.
+* -text
