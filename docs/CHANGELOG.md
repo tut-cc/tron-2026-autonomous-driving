@@ -181,6 +181,65 @@ RA8P1 カメラAI・M33 µT-Kernel 統合版（vehicle-output）。`hardware_ver
 - ブラウザで確認（Playwright）：▲＋◀ で throttle=1・steering=-1、指を離すとニュートラル。`fsdata.h` は `M85Web/script/generate_web.sh` で再生成。
 - README・webapp README・ui-spec・HARDWARE_TEST を更新。控え：`C:\TRON\demo_evidence_archive\before_rc_layout\`。
 
+### 4p. demo_refine_20260927 の取り込み（2026-09-27 18:00、PC/JSテスト PASS・**ARMビルド未実施・実機未検証**）
+別系統で作業した `demo_refine_20260927`（9/26 のリファクタ版から分岐し、映像配信・実走行フィードバックを反映した版）を、この demo を土台に比較して取り込んだ。refine 側の実機記録では、基板には refine 系の r6 または映像候補版が書き込まれている可能性がある（この統合版はまだ書き込んでいない）。
+
+取り込んだもの：
+| 内容 | 主なファイル |
+|---|---|
+| ToF 通常停止 100 mm（`VC_TOF_PRESTOP_MM`、非緊急）・緊急停止 50 mm・解除 101 mm（利用者指定）。100 mm 以内は開始も拒否 | `vehicle_control.h/.c`, `control_runtime.c` |
+| 停止理由の分離：`VC_TOF_NEAR` / `VC_TOF_PRESTOP` / `VC_ESTOP` / `VC_AI_OBSTACLE`（値は既存の後ろに追加）→ Web `DISTANCE_EMERGENCY` / `DISTANCE_PRESTOP` / `BUTTON_EMERGENCY` / `AI_OBSTACLE`、AUTO 中の不正・古い AI は `ROAD_UNAVAILABLE` | `vehicle_control.h`, `web_control_adapter.c`, `control_protocol.*`, `js/constants.js` |
+| **ESTOP は基板リセットまでラッチ**（Web RESET・センサー回復で解除しない。既存の緊急停止を上書き） | `vehicle_control.c`, `control_runtime.c` |
+| M33 status 送信 10→50 ms、M85 gateway 周期 1→5 ms、カメラの推論後待機 10→5 ms | `control_runtime.c`, `m85_gateway_task.c`, `user_config.h` |
+| 走行路：実測した行だけの `path_valid_mask`、横ずれは最も近い実測中心、向きは実測中心の傾き（二重計上をやめた）。ゲイン 0.45/0.35→0.30/0.25。人・車の前方検出を走行路喪失より優先。安全コリドーは画像中央基準。障害物は人・車のみ | `road_navigation.c/.h`, `autonomy_controller.c`, `control_motor.c` |
+| オンボード映像 `GET /video_feed`：240×180・256 色 BMP にコース境界・走行路・AI 枠を描画。映像タスク（優先度 20）と USB 診断タスク（22）を分離、USB 端末が無くても止まらない書き込み | `frame_stream.c/.h`, `frame_stream_bmp.h`, `frame_stream_overlay.h`, `usb_pcdc_console.c/.h`, `app_main_httpd.c`, `control_api.c` |
+| Web：映像表示（`js/video.js`、1 件ずつ取得・100 ms 間隔・3.5 s 中断）、INFO に凡例とカメラ診断。**ラジコン式パッドと縦持ち時の横画面表示（全画面＋向きロック、無理なら 90° 回転）は維持**（refine の「縦横両対応・回転撤去」は実機で縦画面になったため戻した）。左右パッドは操作フッターの上段へ | `index.html`, `style.css`, `js/*.js`, `web/fsdata.h`（`generate_web.sh` で再生成） |
+| 起動構成：ELF をワークスペース相対パスに、重複イメージ無効、起動前自動ビルド無効 | `CPU0/ra8p1_vision_BothCore_Download.launch` |
+| テスト：ToF 100/50 mm・ESTOP ラッチ・停止理由・操舵符号、`control_motor` / `road_navigation` / BMP / overlay の契約テスト、`video.test.mjs` | `control/tests/*`, `CPU0/tools/*`, `tools/test_host.py`, `make_evidence.py`, `CHECK_BEFORE_FLASH.cmd` |
+
+demo 側を残したもの（refine と食い違った点）：
+- AI フレーム鮮度は **600 ms**（refine は 500 ms。利用者の判断で実測根拠のある 600 ms を維持）。
+- Reset_Handler で**停止しない**起動構成（利用者の判断）。
+- 左右タイヤの入れ替えは `MOTOR_SWAP_SIDES`（ドライバ）で 1 回だけ。refine は同じ現象を `vehicle_control.c` 側で入れ替えていたので、二重に入れ替えないよう取り込んでいない。
+- TOR、AUTO 拒否理由 3 種、`VC_WEB_TIMEOUT_MS`=300 ms、`obstacle_kernels.c`（refine の同等の高速化は取り込まず）、ラジコン式パッド、`tools/` 構成、ループバック試験タスク・`motor_output_backend` の削除。
+- refine の未使用関数（`frame_stream_send_rgb565` / `send_navigation` / `video_lease_busy`、`road_navigation_stop_reason_text`、`control_motor_*_name`、`vc_safe`）は取り込んでいない。
+
+未確認：ARM LLVM ビルド（`MAKE_EVIDENCE.cmd`）、実機での映像更新・停止理由表示・100/50 mm の実距離・ESTOP ラッチ。50 mm は衝突回避を保証する距離ではない。
+
+### 4q. コース認識をゆるく（2026-09-27 19:40、利用者の指示「がばがばにしたい」、PCテスト PASS・実機未検証）
+| 項目 | 前 | 後 |
+|---|---|---|
+| 白の下限 R/G/B | 115/115/105 | 90/90/80（影・暗い照明の紙も白） |
+| 白の色差上限 | 75 | 85 |
+| 端の見落とし許容 | 2 サンプル | 3 |
+| 1 行の最小幅 | 画面の 6 % | 4 % |
+| 手前の最小幅 / 先の最小幅 | 22 % / 8 % | 12 % / 5 % |
+| 手前の実測行 | 一番下の行が必須 | 下から 3 行のどれか |
+| 目標行 | ちょうど先読み位置が実測 | 近くの実測行で代用可（従来の選び方） |
+| 路面らしさ 開始 / 維持 | 0.65 / 0.50 | 0.45 / 0.35（`ai_control_signals.h`） |
+| 走行路閉塞とみなす非白の割合 | 30 % | 60 % |
+| AUTO 開始・AI 停止解除に必要な連続良好フレーム | 3 | 2 |
+
+合成画像で、暗い紙（RGB 100,100,90）・幅 13 % の細い紙・手前半分だけの紙・一番下が隠れた紙が、前は停止、後は走行可になることを確認。ベージュ系の床を白と誤認しやすくなる。人・車の AI 停止、ToF、STOP/ESTOP は変更なし。
+
+### 4r. 直線をまっすぐ・奥が見えなくても進む（2026-09-27 19:50、利用者の指示、PCテスト PASS・実機未検証）
+蛇行対策（M33 `control_motor.c`）：
+- ゲイン 横ずれ 0.30→0.22、向き 0.25→0.18。
+- 不感帯：横ずれ ±0.06、向き ±0.08 以内は 0 とみなす（まっすぐな紙の上の小さな揺れで舵を切らない）。
+- 平滑化：カメラの新しいフレームごとに、舵を新しい値へ半分だけ寄せる（`steering_filter_weight`=0.5）。停止・再開時は直進から始める。カメラ 0.3〜0.5 s の遅れで行き過ぎて戻る振動を抑える。
+
+奥行き（M85 `road_navigation.c`, `user_config.h`）：
+- 路面らしさは手前 6 行（12 行中）だけで計算。奥で紙が切れても下がらない。
+- 先読み位置 65 %→50 %。
+- 走行路閉塞の判定は、紙が実際に見えている範囲（最も奥の実測行まで）だけで行う。紙の終わりの先を「ふさがれている」と扱わない。
+- 合成画像：画面下 20〜30 % にしか紙がなくても走行可（前は停止）。紙の上の箱・紙なしは従来どおり停止。
+
+### 4s. デモ想定の反映とAI周期の短縮（2026-09-27 20:00、PCテスト PASS）
+想定：ゆるいカーブだけのコースを完全デモとする。止まる条件は ToF（100 mm 停止／50 mm 緊急）と「手前に白いコースが無くなったら TOR（出力 0）」のまま。急カーブ・紙の終わりは TOR の見せ場として使える。
+- カーブで減速（M33 `control_motor.c`）：前進分 ×（1 − 0.4 × |舵| / 最大舵）。最大舵で 60 %。カメラの遅れで曲がりきれないのを減らす。
+- AI 周期の短縮（M85 `mipi_csi.c`, `user_config.h`）：人・車の NPU 推論を 2 フレームに 1 回（`AI_DETECT_EVERY_N_FRAMES`=2）。間のフレームは新しい画像でコース判定だけを行い、人・車の枠は前回の結果を使う。コース情報が M33 に届く間隔が約半分になる見込み。代わりに、新しく現れた人・車の検出が最大 1 フレーム遅れる（ToF・STOP/ESTOP は影響なし）。1 に戻せば従来どおり。
+- 効果は `g_ai_stage_us[8]`（周期）と `[2]`（推論を含む検出）で実機計測する。
+
 ### 5. 次にやること
 0. `MAKE_EVIDENCE.cmd`（クリーンビルド＋テスト＋verify）でARMビルドが通るか確認 → `CHECK_BEFORE_FLASH.cmd`。
 1. VM を外して書き込み（計測変数入り・最適化1〜3入り）、`g_ai_stage_us` / `g_ai_stage_max_us` / `g_ai_arena_used_bytes` を読む（予測 1.24MB と照合）。

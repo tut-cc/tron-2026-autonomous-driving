@@ -32,6 +32,11 @@ typedef enum
     STOP_REASON_MANUAL_ABORT_BUTTON,
     STOP_REASON_COMM_TIMEOUT,
     STOP_REASON_SENSOR_ERROR,
+    STOP_REASON_DISTANCE_EMERGENCY, /* ToF <= emergency distance (50 mm)      */
+    STOP_REASON_BUTTON_EMERGENCY,   /* Web ESTOP (latched until board reset)  */
+    STOP_REASON_AI_OBSTACLE,        /* AI person/car in the driving corridor  */
+    STOP_REASON_DISTANCE_PRESTOP,   /* ToF <= ordinary stop distance (100 mm) */
+    STOP_REASON_ROAD_UNAVAILABLE,   /* AI frame invalid/stale in AUTO         */
     STOP_REASON_COUNT
 } stop_reason_t;
 typedef enum

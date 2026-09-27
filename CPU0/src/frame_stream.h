@@ -24,6 +24,22 @@ fsp_err_t frame_stream_publish_navigation(uint8_t const * p_frame,
                                           uint16_t height,
                                           obstacle_detector_result_t const * p_detections,
                                           road_navigation_result_t const * p_navigation);
+/* Publishes camera/AI output for HTTP without waiting for the diagnostic USB
+ * stream. Both functions are serviced by separate low-priority tasks. */
+fsp_err_t frame_stream_video_task_poll(void);
 fsp_err_t frame_stream_usb_task_poll(void);
+
+/* The onboard HTTP UI polls a low-rate BMP snapshot.  The producer prepares
+ * these fixed-size responses in the low-priority video task; HTTP only leases
+ * an immutable slot while lwIP copies it to its TCP buffers. */
+typedef struct
+{
+    uint8_t const * data;
+    uint32_t length;
+    uint8_t slot;
+} frame_stream_http_snapshot_t;
+
+bool frame_stream_http_snapshot_acquire(frame_stream_http_snapshot_t * p_snapshot);
+void frame_stream_http_snapshot_release(uint8_t slot);
 
 #endif /* FRAME_STREAM_H_ */

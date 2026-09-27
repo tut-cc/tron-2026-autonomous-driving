@@ -55,11 +55,60 @@ int main(void)
     tof_safety_result_t tof;
 
     control_motor_default_config(&config);
+    assert(config.lateral_gain == 0.22F);
+    assert(config.heading_gain == 0.18F);
+    assert(config.lateral_deadband == 0.06F && config.heading_deadband == 0.08F);
+    assert(config.steering_filter_weight == 0.50F);
     control_motor_init(&controller, &config, 0U);
     reach_auto(&controller, &perception, &tof, &output);
     assert(MOTOR_STOP_COAST == output.stop_action);
     assert(output.steering_command > 0.0F);
     assert(output.left_command > output.right_command);
+
+    /* Anti-weaving: small errors on a straight strip give exactly zero
+     * steering; a real offset converges to gain * (error - deadband), half
+     * way per camera frame, and repeated updates of the same frame do not
+     * advance the filter. */
+    {
+        uint32_t seq = 10U;
+        for (uint32_t i = 0U; i < 12U; i++, seq++)
+        {
+            perception = make_perception(seq, seq * 10U);
+            perception.lateral_error = 0.05F;
+            perception.heading_error = -0.07F;
+            tof = make_tof(seq, seq * 10U, 500U);
+            control_motor_update(&controller, &perception, &tof, seq * 10U, &output);
+        }
+        assert(output.steering_command > -0.001F && output.steering_command < 0.001F);
+        assert(output.left_command - output.right_command < 0.002F && output.right_command - output.left_command < 0.002F);
+
+        perception = make_perception(seq, seq * 10U);
+        perception.lateral_error = 0.56F;
+        perception.heading_error = 0.0F;
+        tof = make_tof(seq, seq * 10U, 500U);
+        control_motor_update(&controller, &perception, &tof, seq * 10U, &output);
+        float first = output.steering_command;
+        assert(first > 0.054F && first < 0.056F);           /* 0.5 * 0.22 * 0.50 */
+        tof = make_tof(seq + 1U, seq * 10U + 5U, 500U);
+        control_motor_update(&controller, &perception, &tof, seq * 10U + 5U, &output);
+        assert(output.steering_command == first);           /* same frame: held */
+        for (uint32_t i = 0U; i < 12U; i++)
+        {
+            seq++;
+            perception = make_perception(seq, seq * 10U);
+            perception.lateral_error = 0.56F;
+            perception.heading_error = 0.0F;
+            tof = make_tof(seq + 100U, seq * 10U, 500U);
+            control_motor_update(&controller, &perception, &tof, seq * 10U, &output);
+        }
+        assert(output.steering_command > 0.109F && output.steering_command < 0.111F);
+        /* Curve slowdown: the forward part (average of both wheels) is lower
+        * while steering than on the straight above. */
+        float turning_speed = (output.left_command + output.right_command) * 0.5F;
+        float expected = config.base_command * (0.50F + 0.50F * 0.90F) *
+                         (1.0F - config.curve_slowdown * output.steering_command / config.max_steering);
+        assert(turning_speed > expected - 0.001F && turning_speed < expected + 0.001F);
+    }
 
     perception = make_perception(4U, 40U);
     tof = make_tof(4U, 40U, 100U);

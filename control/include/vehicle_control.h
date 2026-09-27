@@ -27,6 +27,11 @@ typedef enum {
      * over; see VC_TOR_TIMEOUT_MS. */
     VC_TOR_REQUEST,       /* state VC_TOR, mode AUTO, waiting for the driver      */
     VC_TOR_TIMEOUT,       /* TOR unanswered -> safe stop (state STOPPED, MANUAL)  */
+    /* Distinct stop causes shown to the operator (2026-09-27 field fix). */
+    VC_TOF_NEAR,          /* valid distance <= VC_TOF_STOP_MM: EMERGENCY          */
+    VC_ESTOP,             /* explicit Web ESTOP: latched until a board reset       */
+    VC_AI_OBSTACLE,       /* AI person/car in the driving corridor: EMERGENCY      */
+    VC_TOF_PRESTOP,       /* valid distance <= VC_TOF_PRESTOP_MM: ordinary STOP    */
     VC_REASON_COUNT
 } vc_reason_t;
 static inline int vc_reason_is_auto_refusal(uint32_t reason)
@@ -70,8 +75,15 @@ static inline int vc_permille_ok(int32_t value)
 
 /* ---- Safety and tuning parameters (single source of truth) ---------------
  * These are provisional engineering values, not validated stopping distances. */
-#define VC_TOF_STOP_MM        150U  /* <= this distance: emergency stop        */
-#define VC_TOF_CLEAR_MM       220U  /* safety stop clears itself at >= this    */
+/* ToF distances were set by the user on 2026-09-27 (ordinary stop 100 mm,
+ * emergency 50 mm).  VL53L1X guarantees ranging from 40 mm, so 50 mm is a
+ * backup, not a demonstrated collision-avoidance distance. */
+#define VC_TOF_STOP_MM         50U  /* <= this distance: emergency stop        */
+#define VC_TOF_PRESTOP_MM     100U  /* <= this distance: ordinary demo stop    */
+#define VC_TOF_CLEAR_MM       101U  /* stop clears only beyond the prestop    */
+#if VC_TOF_STOP_MM >= VC_TOF_PRESTOP_MM || VC_TOF_CLEAR_MM <= VC_TOF_PRESTOP_MM
+#error "ToF thresholds must satisfy STOP < PRESTOP < CLEAR"
+#endif
 #define VC_TOF_FRESH_MS       100U  /* ToF sample must be newer than this      */
 #define VC_LINK_FRESH_MS      300U  /* M85 heartbeat must be newer than this   */
 #define VC_AI_FRESH_MS        AI_FRAME_MAX_AGE_MS /* AI frame age limit (see ai_control_signals.h) */
@@ -127,7 +139,7 @@ typedef struct {
 typedef struct {
     control_motor_t path;      /* AUTO path follower (owned by vc_step())     */
     vc_inputs_t in;
-    vc_status_t status;        /* published to the M85 every 10ms             */
+    vc_status_t status;        /* published to the M85 every 50ms             */
     uint32_t last_step_ms;     /* previous vc_step() (control_max_gap_ms)     */
     uint32_t tor_ms;           /* time TOR was entered (VC_TOR_TIMEOUT_MS)    */
     uint32_t start_count;      /* incremented by every successful vc_start()  */
@@ -143,12 +155,16 @@ void vc_link(vc_t *, uint32_t now);
  * STOP (older sequence) can never re-arm MANUAL.  Call after the output has
  * been disarmed. */
 void vc_fence_web(vc_t *, uint32_t stop_seq, uint32_t now);
+/* Disarm and zero the output.  An existing EMERGENCY is never downgraded;
+ * only VC_ESTOP may replace its reason. */
 void vc_stop(vc_t *, uint32_t reason, int emergency);
 /* Start in the current mode: Web AUTO button (AUTO) or D-pad press (MANUAL). */
 vc_arm_result_t vc_start(vc_t *, uint32_t now);
 vc_arm_result_t vc_clear_emergency(vc_t *, uint32_t now);
 void vc_step(vc_t *, uint32_t now, control_motor_output_t *out);
-/* VC_OK when ToF and M85 link are both healthy, otherwise VC_TOF or VC_LINK. */
+/* VC_OK when ToF and M85 link are both healthy.  Otherwise VC_TOF (invalid /
+ * stale), VC_TOF_NEAR (emergency range), VC_TOF_PRESTOP (ordinary stop range;
+ * callers stop without EMERGENCY) or VC_LINK. */
 uint32_t vc_unsafe_reason(const vc_t *, uint32_t now);
 #ifdef __cplusplus
 }

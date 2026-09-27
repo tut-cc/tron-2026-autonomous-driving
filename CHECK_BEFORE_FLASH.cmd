@@ -9,7 +9,7 @@ python -B tools\test_host.py
 if errorlevel 1 goto fail
 where node >nul 2>nul
 if errorlevel 1 goto fail
-node --test M85Web\Application\mini-4wd-webapp\tests\state-machine.test.mjs M85Web\Application\mini-4wd-webapp\tests\comm.test.mjs
+node --test M85Web\Application\mini-4wd-webapp\tests\state-machine.test.mjs M85Web\Application\mini-4wd-webapp\tests\comm.test.mjs M85Web\Application\mini-4wd-webapp\tests\video.test.mjs
 if errorlevel 1 goto fail
 echo PASS: vehicle-output build and verification
 popd

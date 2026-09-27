@@ -692,6 +692,9 @@ static fsp_err_t camera_serial_stream (void)
 {
     fsp_err_t err = FSP_SUCCESS;
     obstacle_detector_result_t detection_result = {0};
+    /* Newest person/car result; reused between NPU runs (AI_DETECT_EVERY_N_FRAMES). */
+    obstacle_detector_result_t last_detection = {0};
+    uint32_t frames_since_detection = AI_DETECT_EVERY_N_FRAMES;
     road_navigation_result_t navigation_result = {0};
     uint8_t user_input[TERM_BUFFER_SIZE + 1] = {RESET_VALUE};
     uint8_t stream_resolution = RESET_VALUE;
@@ -788,9 +791,19 @@ static fsp_err_t camera_serial_stream (void)
              * transfer run. Use a private snapshot so one analysis never mixes frames.
              */
             uint32_t t_rotated = DWT->CYCCNT;
-            /* Stage 3: recognize objects in the rotated image. */
+            /* Stage 3: recognize objects in the rotated image.  The NPU runs on
+             * every AI_DETECT_EVERY_N_FRAMES-th frame; in between, the road is
+             * analysed on the new image with the previous person/car boxes, so
+             * the path reaches the M33 more often (2026-09-27). */
             memset(&detection_result, 0, sizeof(detection_result));
-            if (g_ai_available)
+            bool run_detector = (frames_since_detection >= AI_DETECT_EVERY_N_FRAMES);
+            if (g_ai_available && !run_detector)
+            {
+                detection_result = last_detection;
+                detection_result.inference_time_us = 0U;
+                ++frames_since_detection;
+            }
+            else if (g_ai_available)
             {
                 err = obstacle_detector_run_rgb565(analysis_snapshot,
                                                    g_image_width,
@@ -807,6 +820,8 @@ static fsp_err_t camera_serial_stream (void)
                     g_ai_available = false;
                     err = FSP_SUCCESS;
                 }
+                last_detection = detection_result;
+                frames_since_detection = 1U;
             }
 
             uint32_t t_detected = DWT->CYCCNT;

@@ -54,6 +54,14 @@ typedef struct
     float lateral_gain;
     float heading_gain;
     float max_steering;
+    /* Anti-weaving (2026-09-27): errors inside the deadband count as zero, and
+     * each new camera frame moves the steering only this fraction toward the
+     * new value (1.0 = no smoothing). */
+    float lateral_deadband;
+    float heading_deadband;
+    float steering_filter_weight;
+    /* Curve slowdown: speed x (1 - curve_slowdown x |steering| / max_steering). */
+    float curve_slowdown;
 
     float obstacle_confidence_stop;
     float obstacle_overlap_stop;
@@ -101,6 +109,11 @@ typedef struct
     uint8_t tof_seen;
     uint8_t good_frame_count;
     uint8_t tof_stop_latched;
+
+    /* Steering low-pass state: updated once per new AI frame. */
+    uint8_t steering_valid;
+    uint32_t steering_ai_seq;
+    float steering_filtered;
 } control_motor_t;
 
 void control_motor_default_config(control_motor_config_t * config);

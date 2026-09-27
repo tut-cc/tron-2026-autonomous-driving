@@ -8,6 +8,11 @@ export const ModeRequest = { NONE: 'NONE', MANUAL: 'MANUAL', AUTO: 'AUTO' };
 
 export const StopReasonText = {
     OBSTACLE:            '障害物検知',
+    AI_OBSTACLE:         'AI障害物検知・停止',
+    ROAD_UNAVAILABLE:    '走行経路を認識できず停止',
+    DISTANCE_EMERGENCY:  '前方50 mmで距離による緊急停止（ToF）',
+    DISTANCE_PRESTOP:    '前方100 mmで通常停止（ToF）',
+    BUTTON_EMERGENCY:    'ボタンによる緊急停止（基板リセットで解除）',
     TOR_TIMEOUT:         '引継ぎ時間切れ',
     MANUAL_ABORT_BUTTON: '手動中断',
     COMM_TIMEOUT:        '通信切断',

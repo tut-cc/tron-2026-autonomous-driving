@@ -4,17 +4,17 @@ RUN_DATE=2026-09-27
 PROFILE=vehicle-output
 COMMAND=python -B tools/verify.py --profile vehicle-output
 EXIT_CODE=0
-PASS: manifest/input/artifact hashes, ELF vector bases, SRAM/flash separation, shared NOLOAD RAM, kernel symbols, scheduler yield, urgent STOP retention, pin ownership, UI/fsdata source match (no /video_feed request or reverse UI path), MOTOR_PHYSICAL_OUTPUT_ENABLE=1, loopback test task absent
-MANIFEST_SHA256 F3952EB154ACC0F0DEE2D568825A4145BE27A44AA0983C79FF34850012B082E3
+PASS: manifest/input/artifact hashes, ELF vector bases, SRAM/flash separation, shared NOLOAD RAM, kernel symbols, scheduler yield, urgent STOP retention, pin ownership, UI/fsdata source match (BMP /video_feed, no reverse UI path), MOTOR_PHYSICAL_OUTPUT_ENABLE=1, loopback test task absent
+MANIFEST_SHA256 F3F8D3562FA98B6DF2E7136D77744AFD38687EB27AE8B62602A58B7F5BA1537A
 {
   "CPU0": {
-    "initial_sp": "0x22047cc0",
-    "reset": "0x2009479",
-    "elf_bytes": 22956004
+    "initial_sp": "0x22047ce0",
+    "reset": "0x2009551",
+    "elf_bytes": 24299500
   },
   "CPU1": {
     "initial_sp": "0x22181020",
-    "reset": "0x20f4e51",
-    "elf_bytes": 971524
+    "reset": "0x20f50dd",
+    "elf_bytes": 974064
   }
 }

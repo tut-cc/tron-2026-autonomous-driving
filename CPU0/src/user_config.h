@@ -30,9 +30,9 @@
 
 /* Yield between processed frames.  The wait lets the lower-priority USB/video
  * consumer run; it is not needed for the camera, which keeps capturing.
- * 2026-09-27: 100 -> 10 ms, it was idle time inside the AI frame period. */
+ * 2026-09-27: 100 -> 10 -> 5 ms, it was idle time inside the AI frame period. */
 #ifndef PERIODIC_IMAGE_INTERVAL_MS
-#define PERIODIC_IMAGE_INTERVAL_MS      (10U)
+#define PERIODIC_IMAGE_INTERVAL_MS      (5U)
 #endif
 /* This wait is part of the AI frame period seen by the M33.  With the measured
  * per-frame work (copy, rotate, inference, road analysis: up to ~400 ms) the
@@ -40,6 +40,18 @@
 #define AI_M85_MEASURED_FRAME_WORK_MS   (400U)
 #if (PERIODIC_IMAGE_INTERVAL_MS + AI_M85_MEASURED_FRAME_WORK_MS) > AI_FRAME_MAX_AGE_MS
 #error "PERIODIC_IMAGE_INTERVAL_MS too long for AI_FRAME_MAX_AGE_MS (see ai_control_signals.h)"
+#endif
+
+/* Run the NPU person/car detector on every Nth camera frame (1 = every frame).
+ * Frames in between reuse the previous boxes and only redo the cheap road
+ * analysis, so path updates reach the M33 about twice as often with N=2.
+ * Cost: a newly appearing person/car is seen up to one extra frame later
+ * (ToF stop and STOP/ESTOP are unaffected). */
+#ifndef AI_DETECT_EVERY_N_FRAMES
+#define AI_DETECT_EVERY_N_FRAMES        (2U)
+#endif
+#if (AI_DETECT_EVERY_N_FRAMES < 1U) || (AI_DETECT_EVERY_N_FRAMES > 3U)
+#error "AI_DETECT_EVERY_N_FRAMES must be 1..3"
 #endif
 
 /* One Full INT8 YOLO-Fastest COCO model; firmware retains four road-user classes. */
@@ -70,26 +82,26 @@
  * of the brown mask. Tune these values under the actual lighting.
  */
 #ifndef NAVIGATION_WHITE_R_MIN
-#define NAVIGATION_WHITE_R_MIN                            (115U)
+#define NAVIGATION_WHITE_R_MIN                            (90U)
 #endif
 #ifndef NAVIGATION_WHITE_R_MAX
 #define NAVIGATION_WHITE_R_MAX                            (255U)
 #endif
 #ifndef NAVIGATION_WHITE_G_MIN
-#define NAVIGATION_WHITE_G_MIN                            (115U)
+#define NAVIGATION_WHITE_G_MIN                            (90U)
 #endif
 #ifndef NAVIGATION_WHITE_G_MAX
 #define NAVIGATION_WHITE_G_MAX                            (255U)
 #endif
 #ifndef NAVIGATION_WHITE_B_MIN
-#define NAVIGATION_WHITE_B_MIN                            (105U)
+#define NAVIGATION_WHITE_B_MIN                            (80U)
 #endif
 #ifndef NAVIGATION_WHITE_B_MAX
 #define NAVIGATION_WHITE_B_MAX                            (255U)
 #endif
 
 #ifndef NAVIGATION_WHITE_MAX_CHANNEL_SPREAD
-#define NAVIGATION_WHITE_MAX_CHANNEL_SPREAD               (75U)
+#define NAVIGATION_WHITE_MAX_CHANNEL_SPREAD               (85U)
 #endif
 
 #ifndef NAVIGATION_BROWN_R_MIN
@@ -137,7 +149,7 @@
 #endif
 
 #ifndef NAVIGATION_MAX_EDGE_MISSES
-#define NAVIGATION_MAX_EDGE_MISSES                       (2U)
+#define NAVIGATION_MAX_EDGE_MISSES                       (3U)
 #endif
 
 /* Below this the road is not found (path_valid=0).  Tied to the M33 hold
@@ -151,15 +163,22 @@
 #endif
 
 #ifndef NAVIGATION_MIN_BOTTOM_ROAD_WIDTH_PERCENT
-#define NAVIGATION_MIN_BOTTOM_ROAD_WIDTH_PERCENT         (22U)
+#define NAVIGATION_MIN_BOTTOM_ROAD_WIDTH_PERCENT         (12U)
 #endif
 
 #ifndef NAVIGATION_MIN_LOOKAHEAD_ROAD_WIDTH_PERCENT
-#define NAVIGATION_MIN_LOOKAHEAD_ROAD_WIDTH_PERCENT      (8U)
+#define NAVIGATION_MIN_LOOKAHEAD_ROAD_WIDTH_PERCENT      (5U)
 #endif
 
+/* Steering target row (percent of the scan height from the bottom).
+ * 2026-09-27: 65 -> 50 so a short visible strip still gives a target. */
 #ifndef NAVIGATION_LOOKAHEAD_PERCENT
-#define NAVIGATION_LOOKAHEAD_PERCENT                     (65U)
+#define NAVIGATION_LOOKAHEAD_PERCENT                     (50U)
+#endif
+
+/* Road confidence uses only this many nearest scan rows (of 12). */
+#ifndef NAVIGATION_CONFIDENCE_ROWS
+#define NAVIGATION_CONFIDENCE_ROWS                       (6U)
 #endif
 
 #ifndef NAVIGATION_SAFETY_ROI_TOP_PERCENT
@@ -171,7 +190,7 @@
 #endif
 
 #ifndef NAVIGATION_BLOCKED_THRESHOLD_PER_MILLE
-#define NAVIGATION_BLOCKED_THRESHOLD_PER_MILLE           (300U)
+#define NAVIGATION_BLOCKED_THRESHOLD_PER_MILLE           (600U)
 #endif
 
 #ifndef NAVIGATION_AI_STOP_BOTTOM_PERCENT

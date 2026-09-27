@@ -9,6 +9,7 @@
 #include "../interface/controller_if.h"
 #include "../protocol/control_json.h"
 #include "control_api.h"
+#include "frame_stream.h"
 #include "lwip/apps/fs.h"
 #include "lwip/apps/httpd.h"
 #include "lwip/pbuf.h"
@@ -53,6 +54,9 @@ static const char method[] = "HTTP/1.0 405 Method Not Allowed\r\nAllow: POST\r\n
 static const char busy[] =
     "HTTP/1.0 503 Service Unavailable\r\nContent-Type: application/json\r\nContent-Length: "
     "16\r\nConnection: close\r\n\r\n{\"error\":\"busy\"}";
+static const char video_unavailable[] =
+    "HTTP/1.0 503 Service Unavailable\r\nContent-Type: text/plain\r\nContent-Length: 18\r\n"
+    "Cache-Control: no-store\r\nRetry-After: 1\r\nConnection: close\r\n\r\ncamera_unavailable";
 /* HTTPD cannot pass unsupported methods/URIs to the POST extension. Its
  * extended-status fallback serves this 501 page before application routing. */
 static const char unimplemented[] =
@@ -229,7 +233,23 @@ static void file_set(struct fs_file *file, const char *data, size_t len)
 int fs_open_custom(struct fs_file *file, const char *name)
 {
     const char *error = NULL;
-    if (!strcmp(name, "/501.html"))
+    if (!strcmp(name, "/video_feed"))
+    {
+        /* Newest BMP snapshot from the low-priority video task.  The slot is
+         * leased until fs_close_custom() so lwIP can copy it without a copy. */
+        frame_stream_http_snapshot_t snapshot;
+        if (frame_stream_http_snapshot_acquire(&snapshot))
+        {
+            file->data = (const char *) snapshot.data;
+            file->len = (int) snapshot.length;
+            file->index = (int) snapshot.length;
+            file->flags = FS_FILE_FLAGS_HEADER_INCLUDED;
+            file->pextension = (void *) (uintptr_t) (snapshot.slot + 1U);
+            return 1;
+        }
+        error = video_unavailable;
+    }
+    else if (!strcmp(name, "/501.html"))
         error = unimplemented;
     else if (!strcmp(name, "/400.html"))
         error = bad;
@@ -296,6 +316,12 @@ int fs_open_custom(struct fs_file *file, const char *name)
 }
 void fs_close_custom(struct fs_file *file)
 {
+    uintptr_t video_slot = (uintptr_t) file->pextension;
+    if ((video_slot >= 1U) && (video_slot <= 2U))
+    {
+        frame_stream_http_snapshot_release((uint8_t) (video_slot - 1U));
+        return;
+    }
     for (unsigned i = 0; i < RESPONSE_SLOTS; ++i)
         if (file->pextension == &replies[i])
         {

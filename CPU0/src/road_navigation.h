@@ -45,6 +45,8 @@ typedef struct st_road_navigation_result
     uint8_t stop_reason;
     uint8_t path_count;
     uint8_t reserved;
+    /* One bit per path entry; set only when image pixels recognized a road run. */
+    uint16_t path_valid_mask;
     road_path_sample_t path[ROAD_NAVIGATION_PATH_POINTS];
 } road_navigation_result_t;
 
@@ -54,6 +56,9 @@ fsp_err_t road_navigation_analyze_rgb565(uint8_t const * p_frame,
                                          uint16_t stride_pixels,
                                          obstacle_detector_result_t const * p_detections,
                                          road_navigation_result_t * p_result);
+
+/* Heading in centidegrees, estimated only from recognized near/far samples. */
+int16_t road_navigation_heading_cdeg(road_navigation_result_t const * p_result);
 
 fsp_err_t road_navigation_render_rgb565(uint8_t const * p_frame,
                                         uint16_t width,

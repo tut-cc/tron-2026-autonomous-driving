@@ -81,7 +81,10 @@ static void gateway_task(INT stacd, void * exinf)
             (void) m85_gateway_runtime_step(now);
             publish_status();
         }
-        tk_dly_tsk(1);
+        /* The M33 status cadence is 50 ms.  A 5 ms gateway period keeps
+         * retained STOP/ESTOP retries responsive while avoiding a 1 kHz
+         * high-priority poll of unchanged mailboxes and status. */
+        tk_dly_tsk(5);
     }
 }
 

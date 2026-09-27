@@ -12,8 +12,8 @@ extern "C" {
 
 /*
  * Cross-core tuning contract: the M85 producer and the M33 consumer both read
- * these, so the two sides cannot drift apart.  Values are unchanged from the
- * 2026-09-26 bench build.
+ * these, so the two sides cannot drift apart.  2026-09-27: relaxed from
+ * 650/500 to 450/350 after field tests found road recognition too strict.
  *
  * Road/path confidence (per mille, = ai_perception_result_t.path_confidence x 1000)
  * is a hysteresis band:
@@ -23,8 +23,8 @@ extern "C" {
  * A value in [HOLD, ENTER) is therefore "road seen, but not good enough to
  * start": the Web UI shows PATH_NOT_READY, while M85 stop_reason stays NONE.
  */
-#define AI_PATH_CONFIDENCE_ENTER_PER_MILLE (650U)
-#define AI_PATH_CONFIDENCE_HOLD_PER_MILLE  (500U)
+#define AI_PATH_CONFIDENCE_ENTER_PER_MILLE (450U)
+#define AI_PATH_CONFIDENCE_HOLD_PER_MILLE  (350U)
 #if AI_PATH_CONFIDENCE_ENTER_PER_MILLE < AI_PATH_CONFIDENCE_HOLD_PER_MILLE || \
     AI_PATH_CONFIDENCE_ENTER_PER_MILLE > 1000U
 #error "path confidence band must satisfy HOLD <= ENTER <= 1000"

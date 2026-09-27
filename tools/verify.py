@@ -346,9 +346,10 @@ assert 'inversion paths' in host_log and 'brake/coast' in host_log and 'no-rever
 frontend=R/'M85Web/Application/mini-4wd-webapp'
 html=(frontend/'index.html').read_text(encoding='utf-8')
 input_js=(frontend/'js/input.js').read_text(encoding='utf-8')
+browser_js='\n'.join(p.read_text(encoding='utf-8') for p in (frontend/'js').glob('*.js'))
 style=(frontend/'style.css').read_text(encoding='utf-8')
-assert not re.search(r'<(?:img|video|source)[^>]+src=["\'][^"\']*video_feed',html,re.IGNORECASE)
-assert not re.search(r'(?:fetch|XMLHttpRequest|EventSource|WebSocket)\s*\([^)]*video_feed',html+input_js,re.IGNORECASE)
+# The onboard BMP snapshot is polled by js/video.js (2026-09-27).
+assert '/video_feed' in html+browser_js and 'js/video.js' in html
 assert 'data-dir="down"' not in html and 'id="dpad-down"' not in html
 assert 'WASD' not in html and 'ArrowDown' not in input_js and 'KeyS' not in input_js
 assert '.dpad-down' not in style
@@ -358,11 +359,9 @@ assert not re.search(r'this\.throttle\s*=\s*[^;\r\n]*-\s*1(?:\.0)?',input_js)
 
 fsdata=(R/'M85Web/Application/web/fsdata.h').read_text(encoding='ascii',errors='replace')
 embedded=bytes(int(value,16) for value in re.findall(r'0x([0-9a-fA-F]{1,2})',fsdata))
-assert b'src="/video_feed"' not in embedded
-assert not re.search(rb'(?:fetch|XMLHttpRequest|EventSource|WebSocket)\s*\([^)]*video_feed',embedded,re.IGNORECASE)
+assert b'/video_feed' in embedded
 for forbidden in (b'data-dir="down"',b'id="dpad-down"',b'.dpad-down',b'ArrowDown',b'KeyS',b'WASD'):
     assert forbidden not in embedded, forbidden
-assert '/video_feed は現行ファームウェアでは未提供'.encode('utf-8') in embedded
 embedded_text=embedded.decode('utf-8',errors='replace').replace('\r\n','\n').replace('\r','\n')
 source_assets=[frontend/'index.html',frontend/'style.css']
 source_assets += sorted(p for p in (frontend/'js').rglob('*') if p.is_file())
@@ -375,13 +374,20 @@ api_doc=(frontend/'docs/protocol.md').read_text(encoding='utf-8')
 http_doc=(R/'M85Web/Application/README_HTTP.md').read_text(encoding='utf-8')
 api_source=(R/'M85Web/Application/http/control_api.c').read_text(encoding='utf-8')
 assert 'POST /api/control' in api_doc and 'POST /api/command' not in api_doc
-assert 'video_feed' in http_doc and 'not implemented' in http_doc
+frame_stream_source=(R/'CPU0/src/frame_stream.c').read_text()
+assert 'video_feed' in http_doc and 'image/bmp' in frame_stream_source
+assert 'frame_stream_http_snapshot_acquire' in api_source
+assert 'frame_stream_http_publish' in frame_stream_source
 assert '"/api/control"' in api_source
 # The WebApp loopback test task was removed (2026-09-27); it must not return.
 assert not (R/'M85Web/Application/control_test_task.c').exists()
 http_main=(R/'M85Web/Application/app_main_httpd.c').read_text()
 assert 'control_test_task' not in http_main
 assert '.itskpri = 12' in http_main and '.itskpri = 20' in http_main
+assert re.search(r'ctsk_usb_stream\s*=\s*\{[^}]*\.itskpri\s*=\s*22\s*,[^}]*\.task\s*=\s*task_usb_stream', http_main, re.S)
+assert 'frame_stream_video_task_poll()' in http_main
+assert 'frame_stream_usb_task_poll()' in http_main
+assert manifest['checks']['usb_stream_task_priority'] == 22
 assert 'camera_task_delay' in source and 'tk_dly_tsk' in source
 assert source.count('camera_task_delay(')>=5
 assert 'frame_id == last_processed_frame' in source
@@ -404,6 +410,6 @@ if verify_log.exists():
     assert f'BUILD_DATE={TAG_DATE}' in evidence
     assert 'PASS: manifest/input/artifact hashes' in evidence
     assert 'MANIFEST_SHA256 '+sha256_file(R/'docs/MANIFEST.json') in evidence
-print(f'PASS: manifest/input/artifact hashes, ELF vector bases, SRAM/flash separation, shared NOLOAD RAM, kernel symbols, scheduler yield, urgent STOP retention, pin ownership, UI/fsdata source match (no /video_feed request or reverse UI path), MOTOR_PHYSICAL_OUTPUT_ENABLE={motor_define}, loopback test task absent')
+print(f'PASS: manifest/input/artifact hashes, ELF vector bases, SRAM/flash separation, shared NOLOAD RAM, kernel symbols, scheduler yield, urgent STOP retention, pin ownership, UI/fsdata source match (BMP /video_feed, no reverse UI path), MOTOR_PHYSICAL_OUTPUT_ENABLE={motor_define}, loopback test task absent')
 print('MANIFEST_SHA256',sha256_file(R/'docs/MANIFEST.json'))
 print(json.dumps(result,indent=2))

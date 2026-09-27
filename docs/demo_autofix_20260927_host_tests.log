@@ -2,21 +2,26 @@ BUILD_EVIDENCE: demo_autofix_20260927
 BUILD_DATE=2026-09-27
 RUN_DATE=2026-09-27
 PROFILE=vehicle-output
-CONTROL_TREE_SHA256=8149B6FBA0BFE069EF03821685618DF49CA97149D8F5FC897D9E7F592A586103
-WEB_TREE_SHA256=8DD875624CD53BAC922CD54BAF8D31F4F2AC40A0071E295010A4360C59EFA82E
+CONTROL_TREE_SHA256=0178FB00DC7AB482055A65EBAF7E0504E2F98193956A427053667B4C064C0137
+WEB_TREE_SHA256=EEC9D15CE02916D7B65E29F276EA106B9AF484E2AC579EF4279E13F3CA31C296
 COMMAND=python -B tools/test_host.py
 EXIT_CODE=0
-PASS control: MANUAL boot, D-pad drive/release, no-reverse, web fail-safe, ToF stop/auto-clear, AUTO start/stop, wrap
+PASS steering sign: AUTO right error and MANUAL left button use the vehicle convention
+PASS control: MANUAL boot, D-pad drive/release, no-reverse, web fail-safe, ToF 100mm stop / 50mm emergency + hysteresis, ESTOP latched until reset, AUTO start/stop, wrap
 PASS IPC: roundtrip, CRC, saturation, stop slot, contention, reboot session
 PASS driver: inversion paths, left/right swap, cap60%/ramp, brake/coast, no-reverse deadtime, watchdog/fault latch
 PASS TOR: entry on path loss (output 0), no auto-resume, take-over to MANUAL, 3000ms timeout safe stop + reset, ToF/ESTOP emergency during TOR, MANUAL never enters TOR
 PASS results: input INVALID/STALE/NOT_NEWER, arm/clear result returned and mirrored, STOP fence, status CRC
+control_motor contract tests: PASS
+road_navigation contract tests: PASS
+frame_stream overlay contract tests: PASS
+frame_stream BMP contract tests: PASS
 PASS shared ABI (784 bytes / control offset128), 180-degree rotation, stride padding, odd center, invalid bounds
 PASS web adapter TOR: tor_active, M33-clock countdown (wrap-safe, clamp, reset), TOR_TIMEOUT -> AUTO_ABORT until reset
 PASS web adapter: request->command ranges, reset/manual abort retained over DRIVE and STOP-only, ESTOP not downgraded, abort mirror is neutral keep-alive, mode request precedence, status->response
 PASS obstacle kernels: prepare_input bit-exact (9 frame shapes incl. stride/portrait/odd), decode_output bit-exact (400 random grids, 25583 candidates, saturated ties, 64-slot replacement)
 PASS web protocol: JSON decode required/duplicate/unknown keys and enums, encode wire names and bounds
-COMMAND=node --test M85Web/Application/mini-4wd-webapp/tests/state-machine.test.mjs M85Web/Application/mini-4wd-webapp/tests/comm.test.mjs
+COMMAND=node --test M85Web/Application/mini-4wd-webapp/tests/state-machine.test.mjs M85Web/Application/mini-4wd-webapp/tests/comm.test.mjs M85Web/Application/mini-4wd-webapp/tests/video.test.mjs
 EXIT_CODE=0
 JS_TESTS=?
 JS_PASS=?

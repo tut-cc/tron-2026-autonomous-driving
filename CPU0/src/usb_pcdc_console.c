@@ -180,6 +180,70 @@ fsp_err_t usb_pcdc_console_write(uint8_t const * p_data, uint32_t length)
     return FSP_SUCCESS;
 }
 
+fsp_err_t usb_pcdc_console_write_if_ready(uint8_t const * p_data, uint32_t length)
+{
+    if ((NULL == p_data) && (0U != length))
+    {
+        return FSP_ERR_ASSERTION;
+    }
+    if (!g_usb_open)
+    {
+        return FSP_ERR_NOT_OPEN;
+    }
+
+    usb_pcdc_refresh_connection_state();
+    if ((!g_usb_configured) || (!g_usb_terminal_open))
+    {
+        return FSP_ERR_NOT_OPEN;
+    }
+
+    uint32_t offset = 0U;
+    while (offset < length)
+    {
+        uint32_t chunk = length - offset;
+        if (chunk > USB_PCDC_TX_CHUNK_SIZE)
+        {
+            chunk = USB_PCDC_TX_CHUNK_SIZE;
+        }
+        while (!g_usb_write_complete)
+        {
+            usb_pcdc_console_poll();
+            if ((!g_usb_configured) || (!g_usb_terminal_open))
+            {
+                return FSP_ERR_NOT_OPEN;
+            }
+        }
+        if ((!g_usb_configured) || (!g_usb_terminal_open))
+        {
+            return FSP_ERR_NOT_OPEN;
+        }
+
+        g_usb_write_complete = false;
+        fsp_err_t err = R_USB_Write(&g_basic0_ctrl, &p_data[offset], chunk, USB_CLASS_PCDC);
+        if (FSP_ERR_USB_BUSY == err)
+        {
+            g_usb_write_complete = true;
+            usb_pcdc_console_poll();
+            return FSP_ERR_USB_BUSY;
+        }
+        if (FSP_SUCCESS != err)
+        {
+            g_usb_write_complete = true;
+            return err;
+        }
+        while (!g_usb_write_complete)
+        {
+            usb_pcdc_console_poll();
+            if ((!g_usb_configured) || (!g_usb_terminal_open))
+            {
+                return FSP_ERR_NOT_OPEN;
+            }
+        }
+        offset += chunk;
+    }
+    return FSP_SUCCESS;
+}
+
 uint32_t usb_pcdc_console_printf(char const * p_format, ...)
 {
     va_list args;

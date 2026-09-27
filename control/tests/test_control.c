@@ -50,25 +50,38 @@ static void test_core(void) {
     /* MANUAL fail-safe: phone silent for VC_WEB_TIMEOUT_MS stops. */
     n=600+VC_WEB_TIMEOUT_MS+10;feed(&v,70,n);vc_step(&v,n,&o);
     assert(!o.motor_enable&&!v.status.armed&&v.status.reason==VC_WEB);
-    /* ToF near: safety stop, clears itself once far again, no auto restart. */
+    /* ToF pre-stop (<= VC_TOF_PRESTOP_MM): ordinary STOP, not an emergency;
+     * starting is refused until the distance is beyond the pre-stop. */
     boot(&v);assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,30)==0&&v.status.armed);
-    t=(tof_safety_result_t){4,40,100,1,0};vc_tof(&v,&t,40);vc_link(&v,40);vc_step(&v,40,&o);
-    assert(!o.motor_enable&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_TOF);
-    t=(tof_safety_result_t){5,50,200,1,0};vc_tof(&v,&t,50);vc_link(&v,50);vc_step(&v,50,&o);
+    t=(tof_safety_result_t){4,40,VC_TOF_PRESTOP_MM,1,0};assert(vc_tof(&v,&t,40)==0);vc_link(&v,40);vc_step(&v,40,&o);
+    assert(!o.motor_enable&&v.status.state==VC_STOPPED&&v.status.reason==VC_TOF_PRESTOP);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,45)==0&&!v.status.armed);
+    assert(g_vc_start_result==VC_ARM_TOF_NOT_OK);
+    /* ToF near (<= VC_TOF_STOP_MM): emergency; it clears itself only beyond
+     * VC_TOF_CLEAR_MM (hysteresis) and never restarts by itself. */
+    t=(tof_safety_result_t){5,50,VC_TOF_STOP_MM,1,0};assert(vc_tof(&v,&t,50)==0);vc_link(&v,50);vc_step(&v,50,&o);
+    assert(!o.motor_enable&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_TOF_NEAR);
+    t=(tof_safety_result_t){6,60,VC_TOF_PRESTOP_MM,1,0};vc_tof(&v,&t,60);vc_link(&v,60);vc_step(&v,60,&o);
     assert(v.status.state==VC_EMERGENCY);                                 /* hysteresis */
-    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,50)==0&&!v.status.armed);
-    t=(tof_safety_result_t){6,60,500,1,0};vc_tof(&v,&t,60);vc_link(&v,60);vc_step(&v,60,&o);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,60)==0&&!v.status.armed);
+    t=(tof_safety_result_t){7,70,VC_TOF_CLEAR_MM,1,0};vc_tof(&v,&t,70);vc_link(&v,70);vc_step(&v,70,&o);
     assert(v.status.state==VC_STOPPED&&!v.status.armed&&!o.motor_enable); /* cleared, not moving */
     assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,0,0,0,70)==0);
     assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,80)==0&&v.status.armed);
-    /* ESTOP stops; it clears itself on the next step when sensors are fine. */
+    /* ESTOP stops and stays latched until a board reset, even when every
+     * sensor is healthy; a Web STOP/reset cannot clear it either. */
     assert(web(&v,VC_WEB_ESTOP,VC_MODE_MANUAL,0,0,0,90)==0&&v.status.state==VC_EMERGENCY);
+    assert(v.status.reason==VC_ESTOP);
     {
         vc_web_t queued_before_stop={wseq-1U,90U,VC_WEB_DRIVE,VC_MODE_MANUAL,1U,1000,0};
         assert(v.status.web_seq==wseq);
         assert(vc_web(&v,&queued_before_stop,90U)<0); /* no stale re-arm */
     }
-    feed(&v,7,90);vc_step(&v,90,&o);assert(v.status.state==VC_STOPPED&&!o.motor_enable);
+    for(i=0;i<20;++i){feed(&v,8+i,90+10*i);vc_step(&v,90+10*i,&o);}
+    assert(v.status.state==VC_EMERGENCY&&v.status.reason==VC_ESTOP&&!o.motor_enable);
+    assert(vc_clear_emergency(&v,280)==VC_ARM_EMERGENCY);
+    assert(web(&v,VC_WEB_STOP,VC_MODE_MANUAL,0,0,0,280)==0&&v.status.reason==VC_ESTOP);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,280)==0&&!v.status.armed);
     /* AUTO button starts autonomous driving and ignores the phone afterwards. */
     boot(&v);assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0);
     assert(v.status.armed&&v.status.mode==VC_MODE_AUTO&&v.status.state==VC_AUTO);
@@ -83,10 +96,14 @@ static void test_core(void) {
     boot(&v);assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0&&v.status.armed);
     assert(web(&v,VC_WEB_MODE,VC_MODE_MANUAL,0,0,0,40)==0);
     assert(!v.status.armed&&v.status.mode==VC_MODE_MANUAL);
-    /* AUTO: ToF near -> safety stop; link loss reported as VC_LINK. */
+    /* AUTO: ToF pre-stop -> ordinary stop; ToF near -> emergency; link loss
+     * reported as VC_LINK. */
     boot(&v);assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0);
-    t=(tof_safety_result_t){4,40,120,1,0};vc_tof(&v,&t,40);
-    assert(!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.mode==VC_MODE_MANUAL);
+    t=(tof_safety_result_t){4,40,VC_TOF_PRESTOP_MM,1,0};vc_tof(&v,&t,40);
+    assert(!v.status.armed&&v.status.state==VC_STOPPED&&v.status.reason==VC_TOF_PRESTOP&&v.status.mode==VC_MODE_MANUAL);
+    boot(&v);assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0);
+    t=(tof_safety_result_t){4,40,VC_TOF_STOP_MM,1,0};vc_tof(&v,&t,40);
+    assert(!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_TOF_NEAR&&v.status.mode==VC_MODE_MANUAL);
     boot(&v);assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0);
     t=(tof_safety_result_t){4,400,500,1,0};vc_tof(&v,&t,400);vc_step(&v,400,&o);
     assert(!o.motor_enable&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_LINK);
@@ -97,7 +114,7 @@ static void test_core(void) {
     a=ai(4,40);a.lateral_error=NAN;assert(vc_ai(&v,&a,40)<0);assert(!v.status.armed);
     assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,40)==0&&!v.status.armed&&v.status.mode==VC_MODE_MANUAL);
     /* AUTO refused while the path follower is not ready; vc_start is a pure check. */
-    vc_init(&v,0);wseq=0;feed(&v,1,10);vc_step(&v,10,&o);
+    vc_init(&v,0);wseq=0;feed(&v,1,10);   /* no vc_step yet: 0 good frames */
     {uint8_t before=v.path.good_frame_count;feed(&v,2,20);
      assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,20)==0);
      assert(!v.status.armed&&v.status.mode==VC_MODE_MANUAL);
@@ -124,7 +141,7 @@ static void test_core(void) {
     boot(&v);assert(vc_tof(&v,0,40)<0);assert(!v.status.tof_valid&&v.status.state==VC_EMERGENCY);
     vc_init(&v,0xfffffff0U);a=ai(0xffffffffU,0xfffffff0U);assert(vc_ai(&v,&a,0xfffffff0U)==0);
     a=ai(0,5);assert(vc_ai(&v,&a,5)==0); /* seq and clock wrap */
-    puts("PASS control: MANUAL boot, D-pad drive/release, no-reverse, web fail-safe, ToF stop/auto-clear, AUTO start/stop, wrap");
+    puts("PASS control: MANUAL boot, D-pad drive/release, no-reverse, web fail-safe, ToF 100mm stop / 50mm emergency + hysteresis, ESTOP latched until reset, AUTO start/stop, wrap");
 }
 static void test_ai_corridor_emergency(void) {
     vc_t v;control_motor_output_t o;ai_perception_result_t a;tof_safety_result_t t;
@@ -139,22 +156,40 @@ static void test_ai_corridor_emergency(void) {
     assert(vc_ai(&v,&a,40)==0&&vc_tof(&v,&t,40)==0);vc_link(&v,40);
     vc_step(&v,40,&o);
     assert(!o.motor_enable&&o.left_command==0.0F&&o.right_command==0.0F);
-    assert(!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_AI);
+    assert(!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_AI_OBSTACLE);
 
     /* Web STOP/reset cannot clear an AI emergency while the obstacle remains. */
     assert(web(&v,VC_WEB_STOP,VC_MODE_MANUAL,0,0,0,45)==0);
     vc_step(&v,50,&o);
     assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY);
 
-    /* Clear requires three healthy new AI frames; clearing never re-arms. */
+    /* Clear requires good_frames_to_auto (2) healthy new AI frames; clearing
+     * never re-arms. */
     feed(&v,5,60);vc_step(&v,60,&o);
     assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY);
     feed(&v,6,70);vc_step(&v,70,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY);
+    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_STOPPED);
     feed(&v,7,80);vc_step(&v,80,&o);
     assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_STOPPED);
     feed(&v,8,90);vc_step(&v,90,&o);
     assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_STOPPED);
+
+    /* An explicit ESTOP upgrades an existing AI emergency and stays latched
+     * after the camera reports a clear path again. */
+    boot(&v);
+    assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0&&v.status.armed);
+    a=ai(4,40);a.obstacle_count=1;
+    a.obstacles[0]=(ai_obstacle_result_t){.confidence=.95F,.corridor_overlap=.9F,
+        .center_x=0.0F,.bbox_bottom=.9F};
+    t=(tof_safety_result_t){4,40,500,1,0};
+    assert(vc_ai(&v,&a,40)==0&&vc_tof(&v,&t,40)==0);vc_link(&v,40);
+    vc_step(&v,40,&o);assert(v.status.reason==VC_AI_OBSTACLE);
+    assert(web(&v,VC_WEB_ESTOP,VC_MODE_MANUAL,0,0,0,55)==0);
+    assert(v.status.reason==VC_ESTOP&&v.status.state==VC_EMERGENCY);
+    feed(&v,5,60);vc_step(&v,60,&o);
+    feed(&v,6,70);vc_step(&v,70,&o);
+    feed(&v,7,80);vc_step(&v,80,&o);
+    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_ESTOP);
 
     /* A close person/car can hide the road, but path_valid=0 must not mask
      * the fresh corridor obstacle.  The same M33 safety path protects MANUAL. */
@@ -166,7 +201,7 @@ static void test_ai_corridor_emergency(void) {
     t=(tof_safety_result_t){4,50,500,1,0};
     assert(vc_ai(&v,&a,50)==0&&vc_tof(&v,&t,50)==0);vc_link(&v,50);
     vc_step(&v,50,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_AI);
+    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_AI_OBSTACLE);
 
     /* No detected hazard: MANUAL's ToF/deadman policy is unchanged even if
      * the autonomous road path is not visible. */
@@ -274,7 +309,7 @@ static void test_slow_ai_period(void) {
         if(now%300==160){a=ai(++seq,now-160);assert(vc_ai(&v,&a,now)==0);last=now;}
         vc_step(&v,now,&o);
     }
-    assert(v.path.good_frame_count>=3);
+    assert(v.path.good_frame_count>=v.path.config.good_frames_to_auto);
     assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,now)==0);
     assert(v.status.armed&&v.status.mode==VC_MODE_AUTO&&g_vc_start_result==VC_ARM_OK);
     /* AI stops arriving: AUTO must stop once the timeout is exceeded. */
@@ -358,11 +393,12 @@ static void test_tor(void)
     assert(web(&v,VC_WEB_STOP,VC_MODE_MANUAL,0,0,0,now)==0 && v.status.reason==VC_OPERATOR);
     /* 5. Hazard during TOR is still an emergency. */
     auto_running(&v,&now,&seq); now+=10; lose_path(&v,now,++seq); vc_step(&v,now,&o);
-    { tof_safety_result_t t={++seq,now+10,120,1,0}; now+=10; vc_tof(&v,&t,now); }
-    assert(v.status.state==VC_EMERGENCY && v.status.reason==VC_TOF);
+    { tof_safety_result_t t={++seq,now+10,VC_TOF_STOP_MM,1,0}; now+=10; vc_tof(&v,&t,now); }
+    assert(v.status.state==VC_EMERGENCY && v.status.reason==VC_TOF_NEAR);
     /* 6. ESTOP during TOR. */
     auto_running(&v,&now,&seq); now+=10; lose_path(&v,now,++seq); vc_step(&v,now,&o);
     assert(web(&v,VC_WEB_ESTOP,VC_MODE_AUTO,0,0,0,now)==0 && v.status.state==VC_EMERGENCY);
+    assert(v.status.reason==VC_ESTOP);
     /* 7. MANUAL driving never enters TOR (it is an AUTO-only state). */
     boot(&v); now=30; seq=3;
     assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,now)==0 && v.status.state==VC_MANUAL);
@@ -395,8 +431,10 @@ static void test_results(void) {
     assert(vc_web(&v,&w,VC_WEB_TIMEOUT_MS+1)==VC_INPUT_STALE&&v.status.reason==VC_WEB);
     /* vc_start()/vc_clear_emergency() return the reason and mirror it. */
     boot(&v);assert(vc_start(&v,30)==VC_ARM_WEB_STALE&&g_vc_start_result==VC_ARM_WEB_STALE);
-    boot(&v);t=(tof_safety_result_t){4,40,200,1,0};vc_tof(&v,&t,40);vc_link(&v,40);
-    assert(vc_clear_emergency(&v,40)==VC_ARM_TOF_NOT_CLEAR&&g_vc_clear_result==VC_ARM_TOF_NOT_CLEAR);
+    boot(&v);t=(tof_safety_result_t){4,40,VC_TOF_PRESTOP_MM,1,0};vc_tof(&v,&t,40);vc_link(&v,40);
+    assert(vc_clear_emergency(&v,40)==VC_ARM_TOF_NOT_OK&&g_vc_clear_result==VC_ARM_TOF_NOT_OK);
+    assert(web(&v,VC_WEB_ESTOP,VC_MODE_MANUAL,0,0,0,40)==0);
+    assert(vc_clear_emergency(&v,40)==VC_ARM_EMERGENCY&&g_vc_clear_result==VC_ARM_EMERGENCY);
     /* STOP fence: after vc_fence_web(seq) only a newer command can re-arm. */
     boot(&v);now=30;
     w=(vc_web_t){50,now,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0};
@@ -410,4 +448,24 @@ static void test_results(void) {
     packet.data[IPC_STATUS_TOF_MM]^=1U;assert(ipc_unpack_status(&packet,&back)==IPC_ERROR);
     puts("PASS results: input INVALID/STALE/NOT_NEWER, arm/clear result returned and mirrored, STOP fence, status CRC");
 }
-int main(void){test_core();test_ai_corridor_emergency();test_ipc();test_driver();test_slow_ai_period();test_path_confidence_band();test_tor();test_results();return 0;}
+/* AUTO and MANUAL share one steering convention at the vehicle level
+ * (positive = right: left wheel faster).  The contest car's crossed DRV8833
+ * wiring is corrected once, in the driver (MOTOR_SWAP_SIDES), never here. */
+static void test_steering_sign(void) {
+    vc_t v;control_motor_output_t o;ai_perception_result_t a;tof_safety_result_t t;unsigned i;
+    boot(&v);
+    assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0&&v.status.armed);
+    v.left=v.right=0.30F;
+    for(i=0;i<30;++i){
+        uint32_t now=40U+10U*i;
+        a=ai(4+i,now);a.lateral_error=0.30F;t=(tof_safety_result_t){4+i,now,500,1,0};
+        assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);vc_step(&v,now,&o);
+    }
+    assert(o.motor_enable&&o.left_command>o.right_command);      /* road to the right */
+    boot(&v);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,-1000,40)==0);
+    for(i=0;i<15;++i){feed(&v,4+i,40+10*i);vc_step(&v,40+10*i,&o);}
+    assert(o.motor_enable&&o.right_command>o.left_command);      /* left button */
+    puts("PASS steering sign: AUTO right error and MANUAL left button use the vehicle convention");
+}
+int main(void){test_steering_sign();test_core();test_ai_corridor_emergency();test_ipc();test_driver();test_slow_ai_period();test_path_confidence_band();test_tor();test_results();return 0;}

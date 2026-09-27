@@ -162,7 +162,7 @@ static void test_status_to_response(void)
     status.reason = VC_AI;
     web_adapter_status_to_response(&status, &response);
     assert(response.mode == VEHICLE_AUTO && response.tor_active);
-    assert(response.stop_reason == STOP_REASON_OBSTACLE);
+    assert(response.stop_reason == STOP_REASON_ROAD_UNAVAILABLE);
     assert(response.armed && response.web_seq == 12U);
 
     status.state = VC_EMERGENCY;
@@ -174,6 +174,22 @@ static void test_status_to_response(void)
     status.reason = VC_OPERATOR;
     web_adapter_status_to_response(&status, &response);
     assert(response.stop_reason == STOP_REASON_MANUAL_ABORT_BUTTON);
+    assert(response.request_reject_reason == REQUEST_REJECT_NONE);
+
+    /* Distinct stop causes (2026-09-27): distance pre-stop / emergency,
+     * button ESTOP, AI obstacle. */
+    status.reason = VC_TOF_NEAR;
+    web_adapter_status_to_response(&status, &response);
+    assert(response.stop_reason == STOP_REASON_DISTANCE_EMERGENCY);
+    status.reason = VC_TOF_PRESTOP;
+    web_adapter_status_to_response(&status, &response);
+    assert(response.stop_reason == STOP_REASON_DISTANCE_PRESTOP);
+    status.reason = VC_ESTOP;
+    web_adapter_status_to_response(&status, &response);
+    assert(response.stop_reason == STOP_REASON_BUTTON_EMERGENCY);
+    status.reason = VC_AI_OBSTACLE;
+    web_adapter_status_to_response(&status, &response);
+    assert(response.stop_reason == STOP_REASON_AI_OBSTACLE);
     assert(response.request_reject_reason == REQUEST_REJECT_NONE);
 }
 

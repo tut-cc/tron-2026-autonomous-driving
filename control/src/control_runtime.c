@@ -10,7 +10,7 @@
  *   pri 4 decision_task   AI/Web queues -> vc_step() -> motion queue
  *   pri 5 web_task        IPC Web/STOP slots -> control_submit_web()
  *   pri 6 vision_task     IPC AI slot and M85 heartbeat
- *   pri 7 status_task     vc_status_t -> IPC status slot
+ *   pri 7 status_task     vc_status_t -> IPC status slot (every 50ms)
  *
  * Error handling rule: every kernel/driver failure stops the output at once.
  * A failure that makes the runtime itself untrustworthy is a fault
@@ -41,6 +41,7 @@ volatile uint32_t g_hb_max_gap_ms, g_hb_gap_over300; /* M85 heartbeat gaps > VC_
 #define TASK_PERIOD_MS     10U
 #define MOTION_MAX_AGE_MS  50U  /* older DecisionTask output is a fault */
 #define QUEUE_DRAIN_MAX    4    /* messages taken per queue per period  */
+#define STATUS_PERIOD_MS   50U  /* 20 Hz UI telemetry; not a safety input */
 
 /* ---- error handling ------------------------------------------------------ */
 static void note_fault(control_fault_t cause)
@@ -145,7 +146,8 @@ static void emergency_task(INT n, void *x)
         if (fatal || hw_fault || flag_failed) {
             stop_locked(VC_INTERNAL, 1);
         } else if (bits) {
-            stop_locked(VC_OPERATOR, (bits & STOP_EMERGENCY) != 0);
+            stop_locked((bits & STOP_EMERGENCY) != 0 ? VC_ESTOP : VC_OPERATOR,
+                        (bits & STOP_EMERGENCY) != 0);
             if (pending_web_stop_valid) {
                 /* Rejects Web messages queued before the STOP.  Only a
                  * strictly newer command may re-arm MANUAL. */
@@ -153,8 +155,8 @@ static void emergency_task(INT n, void *x)
                 pending_web_stop_valid = 0U;
             }
         } else if (vehicle.status.armed) {
-            uint32_t unsafe = vc_unsafe_reason(&vehicle, now); /* VC_TOF or VC_LINK */
-            if (unsafe != VC_OK) stop_locked(unsafe, 1);
+            uint32_t unsafe = vc_unsafe_reason(&vehicle, now); /* ToF or link */
+            if (unsafe != VC_OK) stop_locked(unsafe, unsafe != VC_TOF_PRESTOP);
         }
         unlock_state();
     }
@@ -176,7 +178,7 @@ static void apply_motion_locked(const motion_t *m, uint32_t now)
         return;
     }
     unsafe = vc_unsafe_reason(&vehicle, now);
-    if (unsafe != VC_OK) { stop_locked(unsafe, 1); return; }
+    if (unsafe != VC_OK) { stop_locked(unsafe, unsafe != VC_TOF_PRESTOP); return; }
     if (control_hw_apply(&m->output, now)) {
         note_fault(CONTROL_FAULT_HW);
         stop_locked(VC_INTERNAL, 1);
@@ -218,8 +220,15 @@ static void distance_task(INT n, void *x)
             (void)vc_tof(&vehicle, 0, now);      /* invalidates the reading, EMERGENCY/VC_TOF */
             stop_locked(VC_TOF, 1);              /* also bumps generation and stops the output */
         } else if (rc == 0) {
+            uint32_t was_armed = vehicle.status.armed;
             (void)vc_tof(&vehicle, &t, now);
-            if (vehicle.status.state == VC_EMERGENCY) { ++generation; control_hw_stop(); }
+            /* The 100 mm pre-stop is an ordinary STOP, but like an emergency it
+             * must inhibit the physical output at once and invalidate queued
+             * motion (new generation). */
+            if ((was_armed && !vehicle.status.armed) || vehicle.status.state == VC_EMERGENCY) {
+                ++generation;
+                control_hw_stop();
+            }
         }
         unlock_state();
         if (pause_task(TASK_PERIOD_MS)) break;
@@ -357,7 +366,7 @@ static void status_task(INT n, void *x)
             ipc_pack_status(&p, cfg.boot_session, ++seq, &s);
             (void)ipc_write(cfg.ipc, &p);        /* drop telemetry when the UI stalls */
         }
-        if (pause_task(TASK_PERIOD_MS)) break;
+        if (pause_task(STATUS_PERIOD_MS)) break;
     }
     tk_ext_tsk();
 }

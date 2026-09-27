@@ -104,20 +104,43 @@ static void make_perception(ai_perception_result_t * perception,
                    ((uint32_t) width * height <= MOTOR_CONTROL_MAX_FRAME_PIXELS) &&
                    (NAVIGATION_STOP_ROAD_NOT_FOUND != navigation->stop_reason) &&
                    (NAVIGATION_STOP_ROAD_TOO_NARROW != navigation->stop_reason) &&
+                   (NAVIGATION_STOP_PATH_BLOCKED != navigation->stop_reason) &&
                    (NAVIGATION_STOP_INVALID_INPUT != navigation->stop_reason));
-    perception->path_valid = path_geometry_valid;
+    uint16_t lateral_target_x = (uint16_t) (width / 2U);
+    uint8_t near_path_valid = 0U;
+    uint32_t path_count = navigation->path_count;
+    if (path_count > ROAD_NAVIGATION_PATH_POINTS)
+    {
+        path_count = ROAD_NAVIGATION_PATH_POINTS;
+    }
+    for (uint32_t index = 0U; index < path_count; ++index)
+    {
+        if (0U != (navigation->path_valid_mask & (uint16_t) (1U << index)))
+        {
+            /* Lateral position uses the nearest measured road center. The
+             * independent heading signal already accounts for near-to-far
+             * displacement, so using target_x here would count a bend twice. */
+            lateral_target_x = navigation->path[index].center;
+            near_path_valid = 1U;
+            break;
+        }
+    }
+    perception->path_valid = (uint8_t) (path_geometry_valid && near_path_valid);
     perception->path_confidence =
         clamp_float((float) navigation->road_confidence_per_mille / 1000.0F, 0.0F, 1.0F);
     perception->lateral_error = clamp_float(
-        ((float) navigation->target_x - ((float) width * 0.5F)) / ((float) width * 0.5F),
+        ((float) lateral_target_x - ((float) width * 0.5F)) / ((float) width * 0.5F),
         -1.0F,
         1.0F);
+    /* This slope uses measured near/far centers, independently of the target
+     * position used for lateral_error. */
     perception->heading_error = clamp_float(
-        (float) navigation->steering_angle_cdeg / (float) NAVIGATION_MAX_STEERING_CDEG,
+        (float) road_navigation_heading_cdeg(navigation) /
+        (float) NAVIGATION_MAX_STEERING_CDEG,
         -1.0F,
         1.0F);
 
-    if (navigation->path_count > 0U)
+    if ((navigation->path_count > 0U) && (0U != (navigation->path_valid_mask & 1U)))
     {
         road_path_sample_t const * near_path = &navigation->path[0];
         perception->path_width =
@@ -136,6 +159,11 @@ static void make_perception(ai_perception_result_t * perception,
          index++)
     {
         obstacle_detection_t const * detection = &detections->detections[index];
+        if ((OBSTACLE_CLASS_PERSON != detection->class_id) &&
+            (OBSTACLE_CLASS_CAR != detection->class_id))
+        {
+            continue;
+        }
         ai_obstacle_result_t * obstacle =
             &perception->obstacles[perception->obstacle_count++];
         obstacle->confidence =
@@ -153,8 +181,7 @@ static void make_perception(ai_perception_result_t * perception,
             1.0F);
     }
 
-    if ((NAVIGATION_STOP_AI_OBJECT_AHEAD == navigation->stop_reason) ||
-        (NAVIGATION_STOP_PATH_BLOCKED == navigation->stop_reason))
+    if (NAVIGATION_STOP_AI_OBJECT_AHEAD == navigation->stop_reason)
     {
         add_synthetic_obstacle(perception, 1.0F);
     }

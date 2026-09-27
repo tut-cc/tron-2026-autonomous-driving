@@ -116,11 +116,15 @@ static stop_reason_t response_stop_reason(const vc_status_t *status)
      * also mislabel it as a running obstacle/communication stop. */
     if (is_mode_start_rejection(status)) return STOP_REASON_NONE;
     switch (status->reason) {
+    case VC_TOF_NEAR:    return STOP_REASON_DISTANCE_EMERGENCY;
+    case VC_TOF_PRESTOP: return STOP_REASON_DISTANCE_PRESTOP;
+    case VC_ESTOP:       return STOP_REASON_BUTTON_EMERGENCY;
+    case VC_AI_OBSTACLE: return STOP_REASON_AI_OBSTACLE;
     case VC_OPERATOR: return STOP_REASON_MANUAL_ABORT_BUTTON;
     case VC_LINK:     /* M85 heartbeat to M33 lost */
     case VC_WEB:      return STOP_REASON_COMM_TIMEOUT; /* Web command stale/invalid */
     case VC_TOF:      return STOP_REASON_SENSOR_ERROR;
-    case VC_AI:       return STOP_REASON_OBSTACLE;
+    case VC_AI:       return STOP_REASON_ROAD_UNAVAILABLE; /* bad/stale AI frame in AUTO */
     case VC_TOR_TIMEOUT: return STOP_REASON_TOR_TIMEOUT;
     case VC_TOR_REQUEST: return STOP_REASON_NONE; /* tor_active carries it */
     default:          return STOP_REASON_NONE;

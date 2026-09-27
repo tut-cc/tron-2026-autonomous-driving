@@ -15,6 +15,14 @@ static float clampf_local(float value, float minimum, float maximum)
     return value;
 }
 
+/* Values within +/-band count as zero; outside it the response starts from 0. */
+static float deadband_local(float value, float band)
+{
+    if (value > band) return value - band;
+    if (value < -band) return value + band;
+    return 0.0F;
+}
+
 /* NaN fails both comparisons, so this also rejects non-finite NaN inputs. */
 static uint8_t value_in_range(float value, float minimum, float maximum)
 {
@@ -37,6 +45,7 @@ static void set_stopped_output(control_motor_t * controller,
     controller->state = state;
     controller->reason = reason;
     controller->good_frame_count = 0U;
+    controller->steering_valid = 0U;   /* a restart begins from straight */
 
     output->command_seq = ++controller->command_seq;
     output->source_ai_seq = (NULL != perception) ? perception->seq : 0U;
@@ -72,8 +81,19 @@ void control_motor_default_config(control_motor_config_t * config)
     config->path_confidence_hold = (float) AI_PATH_CONFIDENCE_HOLD_PER_MILLE / 1000.0F;
 
     config->base_command = 0.35F;
-    config->lateral_gain = 0.45F;
-    config->heading_gain = 0.35F;
+    /* 2026-09-27 field fixes (AUTO weaving): lateral error comes from the
+     * nearest measured road centre and heading from the measured slope (no
+     * double counting); gains 0.45/0.35 -> 0.30/0.25 -> 0.22/0.18, plus a
+     * deadband and per-frame smoothing so a straight strip is driven straight
+     * despite the 0.3-0.5 s camera latency. */
+    config->lateral_gain = 0.22F;
+    config->heading_gain = 0.18F;
+    config->lateral_deadband = 0.06F;
+    config->heading_deadband = 0.08F;
+    config->steering_filter_weight = 0.50F;
+    /* Slow down in curves so the camera latency costs less path error:
+     * at full steering the forward command is 60 % of the straight value. */
+    config->curve_slowdown = 0.40F;
     config->max_steering = 0.35F;
 
     config->obstacle_confidence_stop = 0.65F;
@@ -81,7 +101,7 @@ void control_motor_default_config(control_motor_config_t * config)
     config->obstacle_bottom_stop = 0.72F;
     config->obstacle_slowdown_gain = 0.65F;
 
-    config->good_frames_to_auto = 3U;
+    config->good_frames_to_auto = 2U;
     config->allow_reverse = 0U;
 }
 
@@ -376,11 +396,32 @@ void control_motor_update(control_motor_t * controller,
 
     speed_command = controller->config.base_command * confidence_scale * obstacle_scale;
     steering_command =
-        (controller->config.lateral_gain * perception->lateral_error) +
-        (controller->config.heading_gain * perception->heading_error);
+        (controller->config.lateral_gain *
+         deadband_local(perception->lateral_error, controller->config.lateral_deadband)) +
+        (controller->config.heading_gain *
+         deadband_local(perception->heading_error, controller->config.heading_deadband));
     steering_command = clampf_local(steering_command,
                                     -controller->config.max_steering,
                                     controller->config.max_steering);
+    /* One smoothing step per new camera frame (this runs every 10 ms with the
+     * same frame in between). */
+    if ((0U == controller->steering_valid) ||
+        (perception->seq != controller->steering_ai_seq))
+    {
+        float weight = clampf_local(controller->config.steering_filter_weight, 0.0F, 1.0F);
+        float previous = (0U == controller->steering_valid) ? 0.0F : controller->steering_filtered;
+        controller->steering_filtered = previous + weight * (steering_command - previous);
+        controller->steering_valid = 1U;
+        controller->steering_ai_seq = perception->seq;
+    }
+    steering_command = controller->steering_filtered;
+    if (controller->config.max_steering > 0.0F)
+    {
+        float turn = steering_command < 0.0F ? -steering_command : steering_command;
+        float slow = clampf_local(controller->config.curve_slowdown, 0.0F, 0.8F) *
+                     clampf_local(turn / controller->config.max_steering, 0.0F, 1.0F);
+        speed_command *= (1.0F - slow);
+    }
 
     minimum_motor_command = (0U != controller->config.allow_reverse) ? -1.0F : 0.0F;
 

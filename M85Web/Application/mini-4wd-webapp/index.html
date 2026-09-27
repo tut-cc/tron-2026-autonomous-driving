@@ -2,30 +2,21 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>ミニ四駆コントローラー</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body data-state="DISCONNECTED">
-  <!-- 車載カメラ映像は現行オンボードHTTP実装に含まれないため、404を発生させない。 -->
-  <div id="camera" role="img" aria-label="車載カメラ映像は未提供">
-    <strong>車載カメラ映像</strong>
-    <span>/video_feed は現行ファームウェアでは未提供</span>
+  <!-- 車載カメラ映像：M85 が生成する BMP スナップショット /video_feed を js/video.js が取得する。 -->
+  <div id="camera" data-video-state="waiting" aria-label="車載カメラ映像">
+    <img id="camera-image" alt="車載カメラの映像">
   </div>
 
-  <!-- ラジコン式操作：左手＝前進（画面左下）、右手＝左右（画面右側）。
+  <!-- ラジコン式操作：左手＝前進（画面左下）、右手＝左右（画面右下、操作フッター内の上段）。
        両方を同時に押せる。後退は安全上ない。 -->
   <div id="pad-throttle" class="pad pad-throttle" role="group" aria-label="前進（左手）">
     <button type="button" id="pad-forward" class="pad-btn pad-forward" data-dir="up" aria-label="前進">
       <svg viewBox="0 0 24 24" width="36" height="36"><path d="M12 5 L4 17 L20 17 Z" fill="currentColor"/></svg>
-    </button>
-  </div>
-  <div id="pad-steer" class="pad pad-steer" role="group" aria-label="左右（右手）">
-    <button type="button" id="pad-left" class="pad-btn pad-left" data-dir="left" aria-label="左">
-      <svg viewBox="0 0 24 24" width="36" height="36"><path d="M5 12 L17 4 L17 20 Z" fill="currentColor"/></svg>
-    </button>
-    <button type="button" id="pad-right" class="pad-btn pad-right" data-dir="right" aria-label="右">
-      <svg viewBox="0 0 24 24" width="36" height="36"><path d="M19 12 L7 4 L7 20 Z" fill="currentColor"/></svg>
     </button>
   </div>
 
@@ -45,8 +36,16 @@
 
   <div id="alert-banner" popover="manual">エラー通知</div>
 
-  <!-- 操作フッター (中断理由 / モード切替 / ABORT) -->
+  <!-- 操作フッター (左右パッド / 中断理由 / モード切替 / ABORT / ESTOP) -->
   <footer class="bottom-bar">
+    <div id="pad-steer" class="pad pad-steer" role="group" aria-label="左右（右手）">
+      <button type="button" id="pad-left" class="pad-btn pad-left" data-dir="left" aria-label="左">
+        <svg viewBox="0 0 24 24" width="36" height="36"><path d="M5 12 L17 4 L17 20 Z" fill="currentColor"/></svg>
+      </button>
+      <button type="button" id="pad-right" class="pad-btn pad-right" data-dir="right" aria-label="右">
+        <svg viewBox="0 0 24 24" width="36" height="36"><path d="M19 12 L7 4 L7 20 Z" fill="currentColor"/></svg>
+      </button>
+    </div>
     <div id="stop-reason">中断理由: <span id="stop-reason-text">NONE</span></div>
     <div class="action-row">
       <button id="btn-mode" class="action-btn">MANUAL MODE</button>
@@ -79,15 +78,29 @@
   <div id="info-modal" popover class="modal-card">
     <h2>操作・機能ガイド</h2>
     <p class="muted">ミニ四駆コントローラー</p>
+    <section class="info-section" aria-labelledby="camera-info-heading">
+      <h3 id="camera-info-heading">カメラ診断・画像表示の凡例</h3>
+      <p id="camera-status" role="status" aria-live="off">カメラ映像を待っています</p>
+      <div id="ai-legend" aria-label="AI画像表示の凡例">
+        <span><i class="legend-road"></i>白: コース認識</span>
+        <span><i class="legend-course"></i>水色: コース境界</span>
+        <span><i class="legend-path"></i>黄: 生成走行路</span>
+        <span><i class="legend-wall"></i>茶: 非白色エリア</span>
+        <span><i class="legend-obstacle"></i>紫枠: AI物体検出（人・車）</span>
+        <span><i class="legend-blocked"></i>赤X: 走行路閉塞</span>
+      </div>
+    </section>
     <ul>
       <li><strong>走行操作（ラジコン式）:</strong> 左手で前進ボタン（画面左下）、右手で ◀ / ▶（画面右）。同時に押すと曲がりながら進む。キーボードは ↑ / W で前進、← / → または A / D で左右</li>
       <li><strong>自動運転:</strong> AUTO MODE ボタンで切替要求</li>
       <li><strong>手動停止:</strong> ABORT ボタンで即時停止</li>
+      <li><strong>緊急停止:</strong> ESTOP ボタン。基板をリセットするまで解除されません</li>
       <li><strong>後退:</strong> 安全上、後退操作は提供していません</li>
       <li><strong>UI調整デバッグ:</strong> <code>Ctrl+Shift+D</code> / <code>\`</code> / <code>F2</code> またはステータスバッジを3回タップ</li>
     </ul>
   </div>
 
+  <script type="module" src="js/video.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

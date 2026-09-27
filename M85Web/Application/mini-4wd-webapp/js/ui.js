@@ -26,15 +26,18 @@ export class UIManager {
 
     renderState(state, mcu) {
         document.body.dataset.state = state;
+        const stopReason = mcu?.stop_reason || 'NONE';
+        const showStopReason = mcu?.armed === false && stopReason !== 'NONE';
+        document.body.dataset.stopReasonActive = showStopReason ? 'true' : 'false';
         const isAbort = state.includes('ABORT'), isTor = state.includes('TOR');
         if (this.el.status)  this.el.status.textContent  = state === 'DISCONNECTED' ? '未接続' : '接続中';
         if (this.el.dist)    this.el.dist.textContent    = (mcu?.front_distance_mm ?? -1) >= 0 ? mcu.front_distance_mm : '--';
         if (this.el.btnMode) this.el.btnMode.textContent = state.startsWith('AUTO') ? 'AUTO MODE' : 'MANUAL MODE';
         if (this.el.btnStop) this.el.btnStop.textContent = isAbort ? 'RESET' : 'ABORT';
         if (isTor && mcu?.tor_remaining_ms != null && this.el.tor) this.el.tor.textContent = (mcu.tor_remaining_ms / 1000).toFixed(1);
-        if (isAbort && this.el.stopReason) {
-            const r = (!mcu?.stop_reason || mcu.stop_reason === 'NONE') ? (state === 'MANUAL_ABORT' ? 'MANUAL_ABORT_BUTTON' : 'OBSTACLE') : mcu.stop_reason;
-            this.el.stopReason.textContent = StopReasonText[r] || r;
+        if (this.el.stopReason) {
+            this.el.stopReason.textContent = showStopReason ?
+                (StopReasonText[stopReason] || stopReason) : 'NONE';
         }
     }
 
@@ -46,4 +49,3 @@ export class UIManager {
         this.alertTimer = setTimeout(() => { try { this.el.alert.hidePopover?.(); } catch (_) {} }, Config.ALERT_DISPLAY_DURATION_MS);
     }
 }
-

@@ -17,10 +17,11 @@ static float slew(float prev, float next)
 }
 
 /* ---- safety predicates (the only place these rules are written) --------- */
-/* Latest ToF sample exists, is valid, is fresh and is farther than the stop distance. */
+/* Latest ToF sample exists, is valid, is fresh and is beyond the ordinary
+ * (pre-)stop distance. */
 static int tof_ok(const vc_t *v, uint32_t now)
 {
-    return v->in.have_tof && v->in.tof.valid && v->in.tof.distance_mm > VC_TOF_STOP_MM &&
+    return v->in.have_tof && v->in.tof.valid && v->in.tof.distance_mm > VC_TOF_PRESTOP_MM &&
            fresh(now, v->in.tof.sample_timestamp_ms, VC_TOF_FRESH_MS);
 }
 /* M85 heartbeat has been seen and is fresh. */
@@ -32,7 +33,10 @@ static int web_fresh(const vc_t *v, uint32_t now)
 
 uint32_t vc_unsafe_reason(const vc_t *v, uint32_t now)
 {
-    if (!tof_ok(v, now)) return VC_TOF;
+    if (!v->in.have_tof || !v->in.tof.valid ||
+        !fresh(now, v->in.tof.sample_timestamp_ms, VC_TOF_FRESH_MS)) return VC_TOF;
+    if (v->in.tof.distance_mm <= VC_TOF_STOP_MM) return VC_TOF_NEAR;
+    if (v->in.tof.distance_mm <= VC_TOF_PRESTOP_MM) return VC_TOF_PRESTOP;
     if (!link_ok(v, now)) return VC_LINK;
     return VC_OK;
 }
@@ -79,12 +83,15 @@ void vc_init(vc_t *v, uint32_t now)
     v->last_step_ms = now;
 }
 
-/* Disarm, zero the output and fall back to MANUAL.  A safety EMERGENCY
- * (ToF / M85 link / operator ESTOP) clears itself in vc_step() once the cause
- * is gone; only VC_INTERNAL (driver/kernel fault) needs a board reset. */
+/* Disarm, zero the output and fall back to MANUAL.  A sensor/link/AI
+ * EMERGENCY clears itself in vc_step() once the cause is gone (never
+ * re-arming by itself); an explicit ESTOP and VC_INTERNAL (driver/kernel
+ * fault) stay latched until a board reset. */
 void vc_stop(vc_t *v, uint32_t why, int emergency)
 {
-    if (v->status.state == VC_EMERGENCY) return;
+    /* An explicit ESTOP always upgrades an earlier sensor/AI emergency.
+     * Lesser stop causes never downgrade an existing emergency. */
+    if (v->status.state == VC_EMERGENCY && why != VC_ESTOP) return;
     v->status.armed = 0;
     v->status.mode = VC_MODE_MANUAL;
     v->left = v->right = 0;
@@ -136,7 +143,10 @@ vc_input_result_t vc_tof(vc_t *v, const tof_safety_result_t *p, uint32_t now)
     if (v->in.have_tof && !newer(p->seq, v->in.tof.seq)) return VC_INPUT_NOT_NEWER;
     v->in.tof = *p; v->in.have_tof = 1;
     v->status.tof_mm = p->distance_mm; v->status.tof_valid = p->valid;
-    if (!p->valid || p->distance_mm <= VC_TOF_STOP_MM) vc_stop(v, VC_TOF, 1);
+    if (!p->valid) vc_stop(v, VC_TOF, 1);
+    else if (p->distance_mm <= VC_TOF_STOP_MM) vc_stop(v, VC_TOF_NEAR, 1);
+    else if (p->distance_mm <= VC_TOF_PRESTOP_MM && v->status.armed)
+        vc_stop(v, VC_TOF_PRESTOP, 0);   /* ordinary stop, no EMERGENCY */
     return VC_INPUT_ACCEPTED;
 }
 
@@ -166,7 +176,8 @@ vc_input_result_t vc_web(vc_t *v, const vc_web_t *w, uint32_t now)
     }
     /* Stop must not get stuck behind an old sequence or a full queue. */
     if (vc_web_action_is_stop(w->action)) {
-        vc_stop(v, VC_OPERATOR, w->action == VC_WEB_ESTOP);
+        vc_stop(v, w->action == VC_WEB_ESTOP ? VC_ESTOP : VC_OPERATOR,
+                w->action == VC_WEB_ESTOP);
         /* Fence off any older DRIVE/MODE already waiting in a mailbox.
          * The production urgent task applies the same fence after the
          * hardware output has been disarmed, then publishes web_seq. */
@@ -252,11 +263,14 @@ vc_arm_result_t vc_start(vc_t *v, uint32_t now)
     return VC_ARM_OK;
 }
 
-/* Result: VC_ARM_OK, TOF_NOT_OK, LINK_STALE or TOF_NOT_CLEAR (mirrored in
- * g_vc_clear_result for the debugger). */
+/* Result: VC_ARM_OK, EMERGENCY (ESTOP / internal fault: board reset only),
+ * TOF_NOT_OK, LINK_STALE or TOF_NOT_CLEAR (mirrored in g_vc_clear_result for
+ * the debugger). */
 volatile uint32_t g_vc_clear_result;
 static vc_arm_result_t clear_check(const vc_t *v, uint32_t now)
 {
+    /* Neither a Web reset nor recovered sensors can clear these. */
+    if (v->status.reason == VC_ESTOP || v->status.reason == VC_INTERNAL) return VC_ARM_EMERGENCY;
     if (!tof_ok(v, now))  return VC_ARM_TOF_NOT_OK;
     if (!link_ok(v, now)) return VC_ARM_LINK_STALE;
     if (v->in.tof.distance_mm < VC_TOF_CLEAR_MM) return VC_ARM_TOF_NOT_CLEAR;
@@ -303,14 +317,17 @@ void vc_step(vc_t *v, uint32_t now, control_motor_output_t *out)
     control_motor_update(&v->path, v->in.have_ai ? &v->in.ai : 0, v->in.have_tof ? &v->in.tof : 0, now, &p);
 
     unsafe = vc_unsafe_reason(v, now);
-    if (v->status.armed && unsafe != VC_OK) vc_stop(v, unsafe, 1);
+    if (v->status.armed && unsafe != VC_OK)
+        vc_stop(v, unsafe, unsafe != VC_TOF_PRESTOP);
     else if (v->status.armed && p.reason == CONTROL_REASON_OBSTACLE_IN_CORRIDOR)
-        vc_stop(v, VC_AI, 1);
-    /* No latch: a safety stop clears itself once the cause is gone (ToF back
-     * beyond VC_TOF_CLEAR_MM, link fresh).  Driving again still needs a new
-     * D-pad press or AUTO button. */
-    if (v->status.state == VC_EMERGENCY && v->status.reason != VC_INTERNAL &&
-        (v->status.reason != VC_AI || p.motor_enable))
+        vc_stop(v, VC_AI_OBSTACLE, 1);
+    /* Sensor/link/AI emergencies clear themselves once the cause is gone (ToF
+     * beyond VC_TOF_CLEAR_MM, link fresh, AI path healthy again).  ESTOP and
+     * internal faults stay latched.  Driving again still needs a new D-pad
+     * press or AUTO button. */
+    if (v->status.state == VC_EMERGENCY &&
+        v->status.reason != VC_INTERNAL && v->status.reason != VC_ESTOP &&
+        (v->status.reason != VC_AI_OBSTACLE || p.motor_enable))
         (void)vc_clear_emergency(v, now);
 
     /* TOR unanswered: safe stop.  The driver sees TOR_TIMEOUT and must reset

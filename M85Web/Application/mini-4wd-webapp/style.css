@@ -7,27 +7,19 @@ input, textarea, select { -webkit-user-select: text; user-select: text; -webkit-
 button, svg { -webkit-user-drag: none; }
 
 html, body {
-  width:        100vw; height: 100dvh; position: relative; overflow: hidden;
+  width:        100%; height: 100%; min-height: 100dvh; position: relative; overflow: hidden;
   font-family:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: #000; color: #000; user-select: none; touch-action: none;
 }
 
-/* 1. 車載カメラ映像（現行オンボードHTTPでは未提供のため明示表示） */
+/* 1. 車載カメラ映像 */
 #camera {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 24px;
-  color: #444;
-  text-align: center;
-  background: #eee;
-  font-size: clamp(14px, 2.5vw, 24px);
+  overflow: hidden;
+  background: #17191c;
   z-index: 1;
   pointer-events: none;
   user-select: none;
@@ -35,9 +27,36 @@ html, body {
   -webkit-user-drag: none;
 }
 
-#camera span { font-size: 0.75em; color: #666; }
+#camera-image {
+  width: 100%; height: 100%; object-fit: contain;
+  opacity: 0; transition: opacity 0.18s;
+  -webkit-user-drag: none;
+}
+#camera[data-video-state="live"] #camera-image,
+#camera[data-video-state="stale"] #camera-image { opacity: 1; }
+#camera[data-video-state="stale"] #camera-image { filter: grayscale(0.45) brightness(0.7); }
+#camera-status {
+  margin: 8px 0; padding: 9px 11px; border-radius: 6px;
+  background: #17191c; color: #fff; font-size: 0.9rem; line-height: 1.45;
+  overflow-wrap: anywhere; user-select: text; -webkit-user-select: text;
+}
+#ai-legend {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 7px 12px; padding: 10px; border: 1px solid #ddd; border-radius: 6px;
+  background: #f7f7f7; color: #111; font-size: 0.9rem;
+}
+#ai-legend span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+#ai-legend i { display: inline-block; width: 12px; height: 8px; border: 1px solid #fff; }
+#ai-legend .legend-road { background: #fff; }
+#ai-legend .legend-course { background: #00ffff; border-color: #00ffff; }
+#ai-legend .legend-path { background: #ffe000; border-color: #ffe000; }
+#ai-legend .legend-wall { background: #633118; border-color: #633118; }
+#ai-legend .legend-obstacle { background: #ff00ff; border-color: #ff00ff; }
+#ai-legend .legend-blocked { width: auto; height: auto; border: 0; color: #ff3333; font-size: 14px; line-height: 8px; }
+#ai-legend .legend-blocked::before { content: '×'; }
 
-/* 2. ラジコン式操作パッド：左手＝前進（左下）、右手＝左右（右、操作フッターの上） */
+/* 2. ラジコン式操作パッド：左手＝前進（左下）、右手＝左右（右下、操作フッター内の上段）。
+      縦横どちらの向きでも同じ配置（画面の強制回転はしない）。 */
 .pad {
   position: absolute;
   display: flex;
@@ -75,13 +94,11 @@ html, body {
 }
 
 .pad-throttle {
-  left: calc(24px + env(safe-area-inset-left, 0px));
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px));
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
 }
-.pad-steer {
-  right: calc(24px + env(safe-area-inset-right, 0px));
-  bottom: calc(24px + 50px + 48px + env(safe-area-inset-bottom, 0px)); /* ABORT 列と中断理由の上 */
-}
+/* 左右パッドは操作フッター（.bottom-bar）の先頭に置き、ボタン列と重ならない */
+.bottom-bar .pad-steer { position: static; }
 .pad-forward { width: 96px; height: 140px; border-radius: 16px; }
 .pad-left, .pad-right { width: 104px; height: 96px; }
 .pad-left  { border-radius: 16px 6px 6px 16px; }
@@ -101,8 +118,8 @@ html, body {
 
 /* 4. HUD ヘッダー */
 .top-bar {
-  position:     absolute; top: calc(8px + env(safe-area-inset-top, 0px));
-  inset-inline: calc(10px + env(safe-area-inset-left, 0px)) calc(10px + env(safe-area-inset-right, 0px));
+  position:     absolute; top: max(8px, env(safe-area-inset-top, 0px));
+  inset-inline: max(10px, env(safe-area-inset-left, 0px)) max(10px, env(safe-area-inset-right, 0px));
   display:      flex; justify-content: space-between; align-items: center; gap: 8px; z-index: 20;
 
   #status-badge {
@@ -130,15 +147,15 @@ html, body {
 /* 6. 操作フッター */
 .bottom-bar {
   position:  absolute;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  right:  calc(24px + env(safe-area-inset-right, 0px));
-  display: flex; flex-direction: column; align-items: center; gap: 6px; z-index: 25;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  right:  max(12px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 25;
 
   #stop-reason {
-    position:  absolute; bottom: calc(100% + 6px); left: 50%; translate: -50% 0;
+    position:  static; translate: none; max-width: min(45vw, 360px);
     display:   none; align-items: center; justify-content: center; gap: 4px;
-    height:    32px; padding: 0 14px; background: #000; border-radius: 6px;
-    font-size: 0.85rem; font-weight: 800; color: #aaa; white-space: nowrap; pointer-events: none;
+    min-height: 36px; padding: 6px 10px; background: #000; border-radius: 6px;
+    font-size: 0.82rem; font-weight: 800; color: #aaa; white-space: normal; pointer-events: none;
     #stop-reason-text { color: #fff; }
   }
 
@@ -146,13 +163,35 @@ html, body {
     display: flex; gap: 8px;
 
     .action-btn {
-      width: clamp(140px, 35vw, 185px); height: 50px; font-size: 1.1rem; font-weight: 800; border-width: 2px;
+      width: clamp(112px, 18vw, 170px); min-height: 48px; padding: 4px 8px; font-size: clamp(0.9rem, 2.3vw, 1.1rem); font-weight: 800; border-width: 2px;
       &.btn-stop {
-        width: clamp(80px, 20vw, 96px); background: #000; color: #fff; font-weight: 900;
+        width: clamp(72px, 10vw, 92px); background: #000; color: #fff; font-weight: 900;
         &:active { background: #555; }
       }
+      &.btn-estop { width: clamp(74px, 10vw, 92px); min-height: 48px; background: #b00020; color: #fff; border-color: #720014; }
     }
   }
+}
+
+/* Portrait on a PC window (fine pointer): the safety actions stack vertically under
+   the steering pad.  Phones/tablets held upright are rotated to landscape (section 10). */
+@media (orientation: portrait) and (pointer: fine) {
+  .pad-left, .pad-right { width: clamp(80px, 22vw, 104px); height: 88px; }
+  .pad-forward { width: clamp(80px, 22vw, 96px); height: 128px; }
+  .bottom-bar { align-items: flex-end; }
+  .bottom-bar .action-row { flex-direction: column; gap: 6px; }
+  .bottom-bar .action-row .action-btn,
+  .bottom-bar .action-row .action-btn.btn-stop,
+  .bottom-bar .action-row .action-btn.btn-estop {
+    width: clamp(112px, 32vw, 156px); min-height: 46px; font-size: 0.92rem;
+  }
+  .bottom-bar #stop-reason { max-width: min(42vw, 190px); }
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .pad-left, .pad-right { width: 96px; height: 80px; }
+  .pad-forward { height: 112px; }
+  .bottom-bar .action-row .action-btn { min-height: 46px; }
 }
 
 /* 7. オーバーレイ & Popover モーダル */
@@ -180,8 +219,11 @@ html, body {
 
 /* INFO Popover */
 .modal-card {
-  margin:    auto; border: 2px solid #000; border-radius: 8px; padding: 20px;
-  max-width: 400px; width: 90vw; background: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  margin:    auto; border: 2px solid #000; border-radius: 8px; padding: clamp(14px, 3vw, 22px);
+  max-width: 560px; width: min(560px, calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+  background: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   h2     { font-size: 1.3rem; font-weight: 800; margin-bottom: 6px; }
   .muted { font-size: 0.85rem; color: #777; margin-bottom: 10px; }
   ul     { margin: 6px 0 0 18px; line-height: 1.6; font-size: 0.95rem; }
@@ -192,6 +234,9 @@ html, body {
     backdrop-filter: blur(3px);
   }
 }
+
+.info-section { margin: 12px 0 16px; }
+.info-section h3 { font-size: 1rem; margin-bottom: 6px; }
 
 /* 8. 状態駆動スタイル */
 body[data-state="DISCONNECTED"] {
@@ -225,6 +270,8 @@ body[data-state*="ABORT"] {
     &:active { background: #000; color: #fff; }
   }
 }
+
+body[data-stop-reason-active="true"] #stop-reason { display: flex; }
 
 .spinner {
   width:  36px; height: 36px; border: 3px solid #ddd; border-top-color: #000; border-radius: 50%;
@@ -590,21 +637,30 @@ body.debug-mode-active {
 }
 
 /* ==========================================================================
-   10. スマホ縦持ち時は画面全体を 90° 回転して横画面で表示する
+   10. スマホ・タブレット縦持ち時は画面全体を 90° 回転して横画面で表示する
    （全画面＋向きロックが使える端末では js/screen.js がそちらを使う）
    ========================================================================== */
 @media (orientation: portrait) and (pointer: coarse) {
   body {
     position: absolute; top: 0; left: 0;
     width: 100dvh; height: 100vw;           /* 横画面の幅・高さ */
+    min-height: 0;
     transform-origin: top left;
     transform: translateX(100vw) rotate(90deg);
   }
+  /* 回転後の高さ（= 端末の幅）が小さいので、横持ちの小画面と同じ寸法にする */
+  .pad-left, .pad-right { width: 96px; height: 80px; }
+  .pad-forward { height: 112px; }
+  .bottom-bar .action-row .action-btn { min-height: 46px; }
   /* popover はトップレイヤーに出るため body の回転を受けない。個別に回転する */
-  #info-modal { rotate: 90deg; max-height: 90vw; overflow: auto; }
+  #info-modal {
+    /* 回転前の幅が画面幅を超えるので margin:auto では中央にならない。中心を明示して回転する */
+    inset: auto; top: 50%; left: 50%; margin: 0;
+    translate: -50% -50%; rotate: 90deg;
+    width: min(560px, calc(100dvh - 24px)); max-height: calc(100vw - 24px);
+  }
   #alert-banner {
     top: 50%; left: auto; right: calc(80px + env(safe-area-inset-right, 0px));
     translate: 50% -50%; rotate: 90deg;
   }
 }
-

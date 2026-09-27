@@ -147,6 +147,7 @@ fsp_err_t road_navigation_analyze_rgb565(uint8_t const * p_frame,
         if (valid)
         {
             valid_count++;
+            p_result->path_valid_mask |= (uint16_t) (1U << i);
             width_sum += (uint32_t) right - left + 1U;
             expected_center = ((expected_center * 2U) + center) / 3U;
         }
@@ -169,7 +170,18 @@ fsp_err_t road_navigation_analyze_rgb565(uint8_t const * p_frame,
     }
     p_result->path_count = ROAD_NAVIGATION_PATH_POINTS;
 
-    uint32_t valid_ratio = (valid_count * 1000U) / ROAD_NAVIGATION_PATH_POINTS;
+    /* 2026-09-27: confidence counts only the near half of the scan rows, so the
+     * paper ending or bending out of view far ahead no longer ends AUTO early.
+     * The far rows are still used for the target/heading when they are seen. */
+    uint32_t near_valid = 0U;
+    for (uint32_t i = 0U; i < NAVIGATION_CONFIDENCE_ROWS; i++)
+    {
+        if (0U != (p_result->path_valid_mask & (uint16_t) (1U << i)))
+        {
+            near_valid++;
+        }
+    }
+    uint32_t valid_ratio = (near_valid * 1000U) / NAVIGATION_CONFIDENCE_ROWS;
     uint32_t average_width = (valid_count > 0U) ? (width_sum / valid_count) : 0U;
     uint32_t width_ratio = (average_width * 1000U) / width;
     if (width_ratio > 1000U)
@@ -181,12 +193,52 @@ fsp_err_t road_navigation_analyze_rgb565(uint8_t const * p_frame,
 
     uint32_t target_index =
         ((ROAD_NAVIGATION_PATH_POINTS - 1U) * NAVIGATION_LOOKAHEAD_PERCENT) / 100U;
+    bool target_is_measured = false;
     if (target_index >= ROAD_NAVIGATION_PATH_POINTS)
     {
         target_index = ROAD_NAVIGATION_PATH_POINTS - 1U;
     }
+
+    /* Prefer the configured lookahead when measured. If it is missing, use
+     * the nearest measured point toward the camera before considering farther
+     * points. Extrapolated rows remain useful for display/safety geometry only. */
+    if (0U == (p_result->path_valid_mask & (uint16_t) (1U << target_index)))
+    {
+        uint32_t selected_index = ROAD_NAVIGATION_PATH_POINTS;
+        for (uint32_t i = target_index + 1U; i > 0U; i--)
+        {
+            uint32_t candidate = i - 1U;
+            if (0U != (p_result->path_valid_mask & (uint16_t) (1U << candidate)))
+            {
+                selected_index = candidate;
+                break;
+            }
+        }
+        /* If no nearer/mid sample exists, use the first recognized farther row. */
+        for (uint32_t i = target_index + 1U;
+             (ROAD_NAVIGATION_PATH_POINTS == selected_index) &&
+             (i < ROAD_NAVIGATION_PATH_POINTS);
+             i++)
+        {
+            if (0U != (p_result->path_valid_mask & (uint16_t) (1U << i)))
+            {
+                selected_index = i;
+            }
+        }
+        if (selected_index < ROAD_NAVIGATION_PATH_POINTS)
+        {
+            target_index = selected_index;
+        }
+    }
+    target_is_measured =
+        (0U != (p_result->path_valid_mask & (uint16_t) (1U << target_index)));
     p_result->target_x = p_result->path[target_index].center;
     p_result->target_y = p_result->path[target_index].y;
+    if (!target_is_measured)
+    {
+        /* No recognized row exists: do not expose display fill as a steering command. */
+        p_result->target_x = (uint16_t) (width / 2U);
+    }
 
     int32_t delta_x = (int32_t) p_result->target_x - ((int32_t) width / 2);
     int32_t delta_y = (int32_t) height - (int32_t) p_result->target_y;
@@ -194,13 +246,14 @@ fsp_err_t road_navigation_analyze_rgb565(uint8_t const * p_frame,
     {
         delta_y = 1;
     }
-    int32_t raw_angle = (delta_x * 5730 * NAVIGATION_STEERING_GAIN_PERCENT) /
-                        (delta_y * 100);
+    int32_t raw_angle = target_is_measured ?
+                        ((delta_x * 5730 * NAVIGATION_STEERING_GAIN_PERCENT) /
+                         (delta_y * 100)) : 0;
     raw_angle = navigation_clamp_i32(raw_angle,
                                      -NAVIGATION_MAX_STEERING_CDEG,
                                      NAVIGATION_MAX_STEERING_CDEG);
-    g_smoothed_steering_cdeg =
-        (int16_t) (((int32_t) g_smoothed_steering_cdeg * 3 + raw_angle) / 4);
+    g_smoothed_steering_cdeg = target_is_measured ?
+        (int16_t) (((int32_t) g_smoothed_steering_cdeg * 3 + raw_angle) / 4) : 0;
     p_result->steering_angle_cdeg = g_smoothed_steering_cdeg;
 
     uint16_t path_occupancy = navigation_measure_path_occupancy(p_pixels,
@@ -221,21 +274,28 @@ fsp_err_t road_navigation_analyze_rgb565(uint8_t const * p_frame,
                             p_result->path[0].left + 1U;
     uint32_t target_width = (uint32_t) p_result->path[target_index].right -
                             p_result->path[target_index].left + 1U;
+    /* Lenient (2026-09-27 field feedback): one of the three nearest rows must be
+     * measured (not only the very bottom row), and the steering target may be
+     * the nearest measured row chosen above instead of the exact lookahead. */
+    bool near_measured = (0U != (p_result->path_valid_mask & 0x7U));
     bool road_too_narrow =
+        (!near_measured) || (!target_is_measured) ||
         (bottom_width * 100U < (uint32_t) width * NAVIGATION_MIN_BOTTOM_ROAD_WIDTH_PERCENT) ||
         (target_width * 100U < (uint32_t) width * NAVIGATION_MIN_LOOKAHEAD_ROAD_WIDTH_PERCENT);
 
-    if (p_result->road_confidence_per_mille < NAVIGATION_MIN_ROAD_CONFIDENCE_PER_MILLE)
+    /* A recognized forward person/car takes precedence over apparent road
+     * loss: a large object can hide the white strip in the same frame. */
+    if (ai_object_ahead)
+    {
+        p_result->stop_reason = (uint8_t) NAVIGATION_STOP_AI_OBJECT_AHEAD;
+    }
+    else if (p_result->road_confidence_per_mille < NAVIGATION_MIN_ROAD_CONFIDENCE_PER_MILLE)
     {
         p_result->stop_reason = (uint8_t) NAVIGATION_STOP_ROAD_NOT_FOUND;
     }
     else if (road_too_narrow)
     {
         p_result->stop_reason = (uint8_t) NAVIGATION_STOP_ROAD_TOO_NARROW;
-    }
-    else if (ai_object_ahead)
-    {
-        p_result->stop_reason = (uint8_t) NAVIGATION_STOP_AI_OBJECT_AHEAD;
     }
     else if (path_occupancy >= NAVIGATION_BLOCKED_THRESHOLD_PER_MILLE)
     {
@@ -263,6 +323,67 @@ fsp_err_t road_navigation_analyze_rgb565(uint8_t const * p_frame,
     }
 
     return FSP_SUCCESS;
+}
+
+int16_t road_navigation_heading_cdeg(road_navigation_result_t const * p_result)
+{
+    if ((NULL == p_result) || (p_result->path_count < 2U))
+    {
+        return 0;
+    }
+
+    uint32_t target_index = ROAD_NAVIGATION_PATH_POINTS;
+    uint32_t count = p_result->path_count;
+    if (count > ROAD_NAVIGATION_PATH_POINTS)
+    {
+        count = ROAD_NAVIGATION_PATH_POINTS;
+    }
+    for (uint32_t i = 0U; i < count; i++)
+    {
+        if ((p_result->path[i].y == p_result->target_y) &&
+            (0U != (p_result->path_valid_mask & (uint16_t) (1U << i))))
+        {
+            target_index = i;
+            break;
+        }
+    }
+    if (ROAD_NAVIGATION_PATH_POINTS == target_index)
+    {
+        return 0;
+    }
+
+    uint32_t near_index = ROAD_NAVIGATION_PATH_POINTS;
+    uint32_t far_index = ROAD_NAVIGATION_PATH_POINTS;
+    for (uint32_t i = 0U; i <= target_index; i++)
+    {
+        if (0U != (p_result->path_valid_mask & (uint16_t) (1U << i)))
+        {
+            if (ROAD_NAVIGATION_PATH_POINTS == near_index)
+            {
+                near_index = i;
+            }
+            far_index = i;
+        }
+    }
+    if ((ROAD_NAVIGATION_PATH_POINTS == near_index) || (far_index == near_index))
+    {
+        return 0;
+    }
+
+    int32_t dx = (int32_t) p_result->path[far_index].center -
+                 (int32_t) p_result->path[near_index].center;
+    int32_t dy = (int32_t) p_result->path[near_index].y -
+                 (int32_t) p_result->path[far_index].y;
+    /* Ignore endpoint movement below one scan interval; it is within the
+     * resolution of the sampled edge detector rather than a reliable slope. */
+    if ((dy <= 0) ||
+        (navigation_abs_i32(dx) <= (int32_t) NAVIGATION_SCAN_STEP_PIXELS))
+    {
+        return 0;
+    }
+    return (int16_t) navigation_clamp_i32((dx * 5730) / dy,
+                                          -NAVIGATION_MAX_STEERING_CDEG,
+                                          NAVIGATION_MAX_STEERING_CDEG);
 }
 
 fsp_err_t road_navigation_render_rgb565(uint8_t const * p_frame,
@@ -609,7 +730,8 @@ static bool navigation_find_run(uint16_t const * p_pixels,
         }
     }
 
-    if ((right <= left) || ((right - left) * 100U < (uint32_t) width * 6U))
+    /* 2026-09-27: 6 -> 4 % of the width so a narrow or distant strip still counts. */
+    if ((right <= left) || ((right - left) * 100U < (uint32_t) width * 4U))
     {
         return false;
     }
@@ -690,6 +812,20 @@ static uint16_t navigation_measure_path_occupancy(uint16_t const * p_pixels,
 {
     uint32_t start_y = ((uint32_t) height * NAVIGATION_SAFETY_ROI_TOP_PERCENT) / 100U;
     uint32_t end_y = ((uint32_t) height * 92U) / 100U;
+    /* 2026-09-27: only look for an obstruction where the strip was actually
+     * seen (up to the farthest measured row).  Beyond the end of the paper
+     * there is nothing to block, so a short visible strip is still drivable. */
+    for (uint32_t i = ROAD_NAVIGATION_PATH_POINTS; i > 0U; i--)
+    {
+        if (0U != (p_result->path_valid_mask & (uint16_t) (1U << (i - 1U))))
+        {
+            if (p_result->path[i - 1U].y > start_y)
+            {
+                start_y = p_result->path[i - 1U].y;
+            }
+            break;
+        }
+    }
     uint32_t blocked = 0U;
     uint32_t total = 0U;
     uint32_t half_corridor = ((uint32_t) width * NAVIGATION_SAFETY_CORRIDOR_PERCENT) / 200U;
@@ -752,6 +888,11 @@ static uint16_t navigation_measure_ai_risk(uint16_t width,
     for (uint32_t i = 0U; i < count; i++)
     {
         obstacle_detection_t const * p_detection = &p_detections->detections[i];
+        if ((OBSTACLE_CLASS_PERSON != p_detection->class_id) &&
+            (OBSTACLE_CLASS_CAR != p_detection->class_id))
+        {
+            continue;
+        }
         uint32_t detection_left = 0U;
         uint32_t detection_top = 0U;
         uint32_t detection_right = 0U;
@@ -780,20 +921,15 @@ static uint16_t navigation_measure_ai_risk(uint16_t width,
             detection_right = (uint32_t) width - 1U;
         }
 
-        uint16_t road_left = 0U;
-        uint16_t road_center = 0U;
-        uint16_t road_right = 0U;
-        navigation_bounds_at_y(p_result,
-                               width,
-                               (uint16_t) detection_bottom,
-                               &road_left,
-                               &road_center,
-                               &road_right);
+        (void) p_result;
         uint32_t safety_half_width = ((uint32_t) width * NAVIGATION_SAFETY_CORRIDOR_PERCENT) / 200U;
-        uint32_t safety_left = ((uint32_t) road_center > safety_half_width) ?
-                               ((uint32_t) road_center - safety_half_width) : 0U;
-        uint32_t safety_right = ((uint32_t) road_center + safety_half_width < width) ?
-                                ((uint32_t) road_center + safety_half_width) : ((uint32_t) width - 1U);
+        uint32_t camera_center = (uint32_t) width / 2U;
+        uint32_t safety_left = (camera_center > safety_half_width) ?
+                               (camera_center - safety_half_width) : 0U;
+        uint32_t safety_right = ((camera_center + safety_half_width) < width) ?
+                                (camera_center + safety_half_width) : ((uint32_t) width - 1U);
+        /* For the straight white-strip demo, a detected person/car in front
+         * must stop even if path extraction finds white space around it. */
         bool overlaps_path = (detection_right >= safety_left) && (detection_left <= safety_right);
         if (overlaps_path && (detection_bottom > p_result->horizon_y))
         {

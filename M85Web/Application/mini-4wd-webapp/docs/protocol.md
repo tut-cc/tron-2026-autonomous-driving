@@ -6,9 +6,10 @@
 - **WebApp画面配信**: HTTP GET（`index.html`, `js/*.js`, `style.css` 等をマイコンから直接配信）
 - **制御・状態通信**: HTTP POST `/api/control`。現行ファームウェアに単独の`GET /api/telemetry` endpointはない。
   - WebAppから操作コマンドJSONを `POST /api/control` で送信し、サーバーは応答URIから最新の状態JSONを返す。
-- **カメラ映像配信**: 現行オンボードHTTP実装では未提供（`/video_feed` は404）。UIは未提供表示を出し、制御APIの動作とは分離する。
-- **ポーリング周期**: 10 Hz (100ms周期)
-- **ポート統合**: 同一オンボードHTTPポート（既定80）で静的UIと制御APIを提供。カメラ映像ストリームは含まない。
+- **カメラ映像配信**: HTTP GET `/video_feed`。オンボードM85が生成した240×180・256色（RGB332）BMPスナップショットをUIが繰り返し取得する。コース境界、生成走行路、AI検出枠（人・車）を画像に描き込む。MJPEGではなく、2.5秒より古いフレームしかない場合は503とする。映像処理・送信は制御より低優先。
+- **映像取得間隔**: UIは前回の `/video_feed` 応答完了から100ms後に次のGETを開始する（同時要求は1件、3.5秒で中断）。10 Hzはベストエフォートのポーリング目標で、実際の更新率はカメラ/AIの生成周期とHTTP取得・画像デコード時間で下がり得る。
+- **制御更新周期**: 10 Hz (100ms周期)
+- **ポート統合**: 同一オンボードHTTPポート（既定80）で静的UI、制御API、BMP映像を提供する。既定の基板IPは `192.168.2.200`。
 
 ## 2. データフォーマット仕様
 
@@ -72,11 +73,16 @@ HTTP応答は、POSTした要求より前のM33状態スナップショットを
 
 #### `stop_reason`（中断要因）の定義
 - `NONE`: 中断なし（正常）
-- `OBSTACLE`: 前方障害物検知（AUTO_ABORT）
+- `OBSTACLE`: 旧版との互換用。現行のM33によるAI人物・車停止では `AI_OBSTACLE` を使う
 - `TOR_TIMEOUT`: TOR猶予時間切れ（AUTO_ABORT）
 - `MANUAL_ABORT_BUTTON`: WebAppまたは車体からの手動中断ボタン押下（MANUAL_ABORT）
 - `COMM_TIMEOUT`: 通信途絶による自律中断（AUTO_ABORT）
-- `SENSOR_ERROR`: 測距センサやカメラ等の異常検知（AUTO_ABORT）
+- `SENSOR_ERROR`: 測距センサ（ToF）の無効・鮮度切れ
+- `DISTANCE_PRESTOP`: ToFが100 mm以下の通常停止（緊急停止ではない）
+- `DISTANCE_EMERGENCY`: ToFが50 mm以下の緊急停止（101 mm以上に離れると自動解除、再発進には操作が必要）
+- `BUTTON_EMERGENCY`: ESTOPボタンによる緊急停止（基板リセットまで解除されない）
+- `AI_OBSTACLE`: AIが進路上の人・車を認識した緊急停止
+- `ROAD_UNAVAILABLE`: AUTO中に受け取ったAI情報が不正・鮮度切れのための停止（走行路の喪失はTORになる）
 
 #### `request_reject_reason`（要求拒否理由）の定義
 - `NONE`: 拒否なし（正常受諾）

@@ -55,13 +55,15 @@ python -B tools/verify.py --profile dry-run
 1. **必ずモーター電源（DRV8833 VM）を外し、車輪を浮かせる。**
 2. `CHECK_BEFORE_FLASH.cmd` が PASS していることを確認する。
 3. Run → Debug Configurations → `ra8p1_vision_BothCore_Download` だけを使う（CPU0/CPU1 の ELF を1回で書き込む）。CPU1 単独の Download/Run は使わない（M33 は M85 が起動する）。
-4. ブレークポイントは設定していないので、書き込み完了と同時にファームが動き出す。
+4. ブレークポイントは設定していないので、書き込み完了と同時にファームが動き出す。起動構成は ELF をワークスペース相対（`${workspace_loc:/ra8p1_vision_CPU0}` / `..._CPU1`）で指定し、起動前の自動ビルドは無効（検証済みの ELF をそのまま書く）。
+5. 書き込み後はブラウザのタブを開き直す（古い UI を使わない）。
 
 ## デバッガで見る変数
 
 | 変数 | 意味 |
 |---|---|
 | `g_vc_start_result` | 最後の開始要求の結果（0 OK、1 緊急停止中、2 ToF 未準備、3 M85 通信途絶、4 AI 経路未準備、5/6 MANUAL 操作） |
+| `g_vc_clear_result` | 最後の緊急停止解除の結果（0 OK、1 ESTOP または内部故障のため解除不可＝基板リセットが必要、2 ToF が 100 mm 以内・無効、3 M85 通信途絶） |
 | `g_control_fault` | M33 内部故障の最初の原因（0 なし、1 初期化、2 時計、3 ロック、4 アンロック、5 停止フラグ、6 キュー、7 遅延、8 モータードライバ、9 走行指令の遅れ） |
 | `g_start_count` | 走行開始の回数 |
 | `g_hb_max_gap_ms` / `g_hb_gap_over300` | M85 heartbeat の最大間隔と 300 ms 超えの回数 |

@@ -44,6 +44,12 @@ int main(void)
     assert(strcmp(control_reject_reason_name(REQUEST_REJECT_LINK_NOT_READY), "LINK_NOT_READY") == 0);
     assert(strcmp(control_reject_reason_name(REQUEST_REJECT_PATH_NOT_READY), "PATH_NOT_READY") == 0);
     assert(strcmp(control_reject_reason_name(REQUEST_REJECT_COUNT), "UNKNOWN") == 0);
+    /* Stop reasons added 2026-09-27 are appended after the existing values. */
+    assert(strcmp(control_stop_reason_name(STOP_REASON_DISTANCE_EMERGENCY), "DISTANCE_EMERGENCY") == 0);
+    assert(strcmp(control_stop_reason_name(STOP_REASON_BUTTON_EMERGENCY), "BUTTON_EMERGENCY") == 0);
+    assert(strcmp(control_stop_reason_name(STOP_REASON_AI_OBSTACLE), "AI_OBSTACLE") == 0);
+    assert(strcmp(control_stop_reason_name(STOP_REASON_DISTANCE_PRESTOP), "DISTANCE_PRESTOP") == 0);
+    assert(strcmp(control_stop_reason_name(STOP_REASON_ROAD_UNAVAILABLE), "ROAD_UNAVAILABLE") == 0);
 
     assert(control_json_encode(&s, out, sizeof(out), &n));
     assert(n == strlen(out));

@@ -43,7 +43,8 @@ LOCAL T_CTSK ctsk_lwip = {             // Task creation information
 };
 LOCAL void task_camera(INT stacd, void *exinf);
 LOCAL void task_video(INT stacd, void *exinf);
-LOCAL ID tskid_camera, tskid_video;
+LOCAL void task_usb_stream(INT stacd, void *exinf);
+LOCAL ID tskid_camera, tskid_video, tskid_usb_stream;
 LOCAL T_CTSK ctsk_camera = {
     .itskpri = 12,
     .stksz = 8192,
@@ -56,6 +57,12 @@ LOCAL T_CTSK ctsk_video = {
     .task = task_video,
     .tskatr = TA_HLNG | TA_RNG3,
 };
+LOCAL T_CTSK ctsk_usb_stream = {
+    .itskpri = 22,
+    .stksz = 4096,
+    .task = task_usb_stream,
+    .tskatr = TA_HLNG | TA_RNG3,
+};
 
 static void task_camera(INT stacd, void *exinf)
 {
@@ -65,6 +72,16 @@ static void task_camera(INT stacd, void *exinf)
 }
 
 static void task_video(INT stacd, void *exinf)
+{
+    (void) stacd;
+    (void) exinf;
+    for (;;) {
+        (void) frame_stream_video_task_poll();
+        tk_dly_tsk(5);
+    }
+}
+
+static void task_usb_stream(INT stacd, void *exinf)
 {
     (void) stacd;
     (void) exinf;
@@ -192,15 +209,29 @@ EXPORT  INT usermain( void )
     }
     tskid_camera = tk_cre_tsk(&ctsk_camera);
     tskid_video = tk_cre_tsk(&ctsk_video);
-    if (tskid_camera <= 0 || tskid_video <= 0) {
-        tm_printf((UB *) "M85 camera/video task initialization failed.\n");
+    tskid_usb_stream = tk_cre_tsk(&ctsk_usb_stream);
+    if (tskid_camera <= 0 || tskid_video <= 0 || tskid_usb_stream <= 0) {
+        tm_printf((UB *) "M85 camera/video/USB task initialization failed.\n");
         return -1;
     }
-    tk_sta_tsk(tskid_camera, 0);
-    tk_sta_tsk(tskid_video, 0);
+    if (tk_sta_tsk(tskid_camera, 0) < E_OK) {
+        tm_printf((UB *) "M85 camera task start failed.\n");
+        return -1;
+    }
+    if (tk_sta_tsk(tskid_video, 0) < E_OK) {
+        tm_printf((UB *) "M85 video task start failed.\n");
+        return -1;
+    }
+    if (tk_sta_tsk(tskid_usb_stream, 0) < E_OK) {
+        tm_printf((UB *) "M85 USB stream task start failed.\n");
+        return -1;
+    }
     /* Create & Start Tasks */
     tskid_lwip = tk_cre_tsk(&ctsk_lwip);
-    tk_sta_tsk(tskid_lwip, 0);
+    if (tskid_lwip <= 0 || tk_sta_tsk(tskid_lwip, 0) < E_OK) {
+        tm_printf((UB *) "M85 lwIP task start failed.\n");
+        return -1;
+    }
 
     tk_slp_tsk(TMO_FEVR);
 
