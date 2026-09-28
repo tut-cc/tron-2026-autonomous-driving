@@ -13,6 +13,3 @@ JLinkLog.log
 __pycache__/
 *.pyc
 .metadata/
-# Not redistributed until its origin/license is confirmed (docs/LICENSE_SURVEY.md).
-# Copy it from the original EK-RA8P1 camera sample project before building CPU0.
-/CPU0/src/prebuilt/camera_sensor.o

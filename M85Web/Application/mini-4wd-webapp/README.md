@@ -1,45 +1,32 @@
 # mini-4wd-webapp
-車載HTTP用の静的ブラウザUIと、開発時のPC mock/sampleを含むWeb資産です。PC mockのREST/MJPEG機能はオンボードCPU0のHTTPD機能を意味しません。
+車載HTTP（CPU0 / M85）が配信するブラウザUIです。`index.html`、`style.css`、`js/` から `../web/fsdata.h` を生成してファームに埋め込みます。
 
-## 起動・利用手順
-
-### 1. PC mockを起動（開発用のみ）
-```bash
-python3 mock_server.py
-```
-- ポート `8765` でPC用mockサーバー（REST API / MJPEG / 静的配信）が起動します。このmockのMJPEGはオンボード`/video_feed`実装ではありません。
-- ターミナル上で `1` 〜 `5` のキーを押すことで、動作シナリオ（手動走行、自動運転、TOR警告、自動中断、手動中断）をリアルタイムに切り替えられます。
-
-### 2. ブラウザ（スマホまたはPC）でアクセス
-スマホやPCのブラウザで以下のURLを開きます：
-
-**http://<サーバーのIPアドレスまたはlocalhost>:8765**
+## 使い方
+スマホやPCのブラウザで `http://192.168.2.200/` を開きます。UI・`/api/control`・映像 `/video_feed`（BMPスナップショット 240×180、256色）はすべて車載M85から配信されます。詳細は `../README_HTTP.md` を参照してください。
 
 - ラジコン式：左手で前進ボタン（画面左下）、右手で ◀ / ▶（画面右）。同時に押すと曲がりながら進みます。キーボードは `↑` / `W` で前進、`←` / `→` または `A` / `D` で左右。後退入力は提供しません。
+- 停止ボタンは `ABORT` の1つだけです。中断画面では `RESET` になります。
 - 右上の「INFO」ボタンからいつでも操作説明を確認できます。
 
-車載用に埋め込むUIはこのディレクトリの`index.html`、`style.css`、`js/`から生成します。オンボードM85は既定で `http://192.168.2.200/` にUIと `/api/control`、コース・経路・AI枠を描いたBMPスナップショット `/video_feed`（240×180、256色）を配信します。PC mockのMJPEGとは別実装です。映像およびモーター動作は実機未確認です。詳細は`../README_HTTP.md`を参照してください。
-
-## サーバーアーキテクチャ
+## 構成
 
 ```text
 mini-4wd-webapp/
-├── server/                     # 車載マイコン・実機でもそのまま使える共通パッケージ
-│   ├── constants.py            # プロトコル定数 (モード・停止要因・拒否理由)
-│   ├── controller.py           # 制御コア (Source of Truth・安全マトリクス・TOR・デッドマン監視)
-│   ├── http_server.py          # 軽量非同期HTTP/REST/MJPEGサーバー (標準ライブラリのみ、Keep-Alive対応)
-│   └── camera_base.py          # カメラ映像プロバイダの基底インターフェース
-│
-├── mock/                       # モック開発専用パッケージ
-│   ├── camera.py               # 疑似コース・疑似カメラ
-│   ├── scenario.py             # テストシナリオ管理
-│   └── scenarios.json          # シナリオ定義データ
-│
-├── mock_server.py              # モック起動エントリポイント (Python版)
-└── sample/                     # C言語実装サンプル (KISS原則・マイコン移植向け)
-    ├── main.c                  # C版エントリポイント & 端末キー入力
-    ├── http_server.c/.h        # 軽量HTTPサーバー (BSD Socket / lwIP両対応)
-    ├── controller.c/.h         # 車両制御コア (安全判定・タイマー)
-    ├── constants.h             # 定数定義
-    └── Makefile                # ビルド設定
+├── index.html / style.css
+├── js/
+│   ├── app.js            # 各部品の組み立て
+│   ├── state-machine.js  # UI状態機械（仕組みはファイル先頭のコメントを参照）
+│   ├── comm.js           # POST /api/control の100ms周期ポーリング
+│   ├── input.js          # パッド・キーボード入力
+│   ├── ui.js             # 画面描画
+│   ├── video.js          # /video_feed の表示
+│   ├── screen.js         # スマホ向け画面制御（選択抑止・横画面）
+│   ├── debug-ui.js       # UI調整用デバッグパネル
+│   └── constants.js      # 状態名・理由文言・タイミング定数
+├── tests/                # node --test tests/*.test.mjs
+├── docs/                 # protocol.md / sequences.md / ui-spec.md
+└── sample/               # C言語実装サンプル（参考用。ファームには含まれない）
 ```
+
+## UIを変更したら
+`M85Web/script/generate_web.sh`（Windowsは `generate_web.ps1`）で `../web/fsdata.h` を再生成し、CPU0をビルドし直します。

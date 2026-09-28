@@ -31,11 +31,8 @@ export const RejectReasonText = {
 
 export const Config = {
     POLLING_INTERVAL_MS:       100 ,
-    TRANSMIT_INTERVAL_MS:      100 ,
+    REQUEST_TIMEOUT_MS:        800 ,
     HEARTBEAT_TIMEOUT_MS:      1500,
-    WS_HEARTBEAT_TIMEOUT_MS:   1500,
     MODE_SWITCH_TIMEOUT_MS:    1000,
-    ALERT_DISPLAY_DURATION_MS: 3000,
-    TOUCH_MAX_DISTANCE:        60  ,
-    INPUT_DEADBAND:            0.05
+    ALERT_DISPLAY_DURATION_MS: 3000
 };

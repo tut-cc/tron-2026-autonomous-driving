@@ -37,7 +37,7 @@ WebAppは、自身が現在認識しているモード `client_mode` を付与�
 | `steering` | 数値 `-1.0 〜 1.0` | ○ | 左右ステアリング指示（負: 左、正: 右、0: 直進） |
 | `mode_request` | `NONE` / `MANUAL` / `AUTO` | ○ | 運転モード切替要求。応答状態が確定するまでHTTP要求ごとに再送し、1つのPOSTに含める切替要求は1件 |
 | `deadman` | `true` / `false` | ○ | 明示的な手動保持入力。`true` のときだけM33が手動走行を許可し、モード選択では代用しない |
-| `estop_request` | `true` / `false` | ○ | 明示的な緊急停止要求。M33のEmergencyラッチを立てるが、Web resetでは解除しない |
+| `estop_request` | `true` / `false` | ○ | 明示的な緊急停止要求（現在のWeb画面にはボタンが無く、常に `false` を送る）。M33のEmergencyラッチを立てるが、Web resetでは解除しない |
 | `manual_abort_request` | `true` / `false` | ○ | 手動中断要求（最優先処理）※旧 `emergency_stop_request` 互換 |
 | `reset_abort_request` | `true` / `false` | ○ | AUTO_ABORT / MANUAL_ABORT の解除・リセット要求 ※旧 `reset_stop_request` 互換 |
 
@@ -80,7 +80,7 @@ HTTP応答は、POSTした要求より前のM33状態スナップショットを
 - `SENSOR_ERROR`: 測距センサ（ToF）の無効・鮮度切れ
 - `DISTANCE_PRESTOP`: ToFが100 mm以下の通常停止（緊急停止ではない）
 - `DISTANCE_EMERGENCY`: ToFが50 mm以下の緊急停止（101 mm以上に離れると自動解除、再発進には操作が必要）
-- `BUTTON_EMERGENCY`: ESTOPボタンによる緊急停止（基板リセットまで解除されない）
+- `BUTTON_EMERGENCY`: ESTOP要求による緊急停止（Web画面からは発生しない）（基板リセットまで解除されない）
 - `AI_OBSTACLE`: AIが進路上の人・車を認識した緊急停止
 - `ROAD_UNAVAILABLE`: AUTO中に受け取ったAI情報が不正・鮮度切れのための停止（走行路の喪失はTORになる）
 

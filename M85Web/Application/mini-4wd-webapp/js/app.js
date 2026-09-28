@@ -11,19 +11,17 @@ export class Mini4WDApp {
 
         this.ui = new UIManager({
             onDriveModeClick:   () => this.stateMachine.requestDriveModeToggle(),
-            onStopClick:        () => this.stateMachine.requestAbortAction()    ,
-            onEstopClick:       () => this.stateMachine.requestEstop(),
+            onStopClick:        () => this.stateMachine.requestAbortAction(),
             onTorTakeoverClick: () => this.stateMachine.requestTorTakeover()
         });
 
         this.stateMachine = new StateMachine(this);
 
         this.comm = new CommManager({
-            onConnect:          ()     => this.stateMachine.handleConnect()      ,
-            onDisconnect:       ()     => this.stateMachine.handleDisconnect()   ,
-            onHeartbeat:        (data, context) => this.stateMachine.handleHeartbeat(data, context),
-            getTransmitPayload: ()           => this.stateMachine.getTransmitPayload(),
-            getTransmitContext: ()           => this.stateMachine.getTransmitContext()
+            nextRequest:  ()              => this.stateMachine.nextRequest(),
+            onHeartbeat:  (data, context) => this.stateMachine.handleHeartbeat(data, context),
+            onConnect:    ()              => this.stateMachine.handleConnect(),
+            onDisconnect: ()              => this.stateMachine.handleDisconnect()
         });
 
         this.debug = new DebugManager();

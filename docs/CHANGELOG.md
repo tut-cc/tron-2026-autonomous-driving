@@ -2,6 +2,16 @@
 
 新しい記録ほど上の「現状」に追記しています。本文中の古いファイル名（`STATUS_20260927_JA.md` など）は当時の名前です（4m 参照）。
 
+## 2026-09-28 Webアプリ整理（ソース反映済み・未書き込み）
+| 内容 | 主なファイル |
+|---|---|
+| ESTOPボタンを撤去し、停止ボタンを ABORT（中断画面では RESET）の1つに統一。`estop_request` はプロトコルに残し常に `false`。M33のESTOPラッチ処理は不変 | `mini-4wd-webapp/index.html`, `style.css`, `js/ui.js`, `js/app.js` |
+| UI状態機械を書き直し。状態は `connected` / `pending`（未確認の操作1つ）/ M33状態 の3つから導出。AUTO中のABORT後に余分なMANUAL要求を送らない（M33の停止がMANUALを選ぶため） | `mini-4wd-webapp/js/state-machine.js`, `js/comm.js`, `tests/*` |
+| PC用Pythonモックサーバー（`mock_server.py`, `mock/`, `server/`）を廃止 | `mini-4wd-webapp/` |
+| `fsdata.h` 再生成 | `M85Web/Application/web/fsdata.h` |
+
+- CPU0 の再ビルド・書き込みと `MAKE_EVIDENCE.cmd` の再実行が必要。CPU1 は変更なし。
+
 ## 現状メモ（2026-09-27）
 
 RA8P1 カメラAI・M33 µT-Kernel 統合版（vehicle-output）。`hardware_verified=false` のまま。
