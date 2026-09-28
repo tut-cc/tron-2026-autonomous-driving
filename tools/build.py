@@ -34,13 +34,18 @@ for core in (['CPU0','CPU1'] if args.core=='all' else [args.core]):
  base=ROOT/core;out=base/'Build';out.mkdir(exist_ok=True);spec=json.loads((base/'sources.json').read_text())
  stamp=out/'build_profile.json'
  generated=(out/'build_profile.json',out/'build_metadata.json',out/f'{core}.elf',out/f'{core}.srec',out/f'{core}.map',out/'link.rsp')
+ # GitHub includes release ELFs but intentionally omits local build stamps and
+ # object files.  The first IDE Build Project must regenerate them rather than
+ # reject the fresh checkout as an unprofiled build.
+ clean_core=args.clean or (not stamp.exists() and any(path.exists() for path in generated[2:]))
  other_core='CPU1' if core=='CPU0' else 'CPU0'
  other_stamp=ROOT/other_core/'Build/build_profile.json'
  if not args.clean and other_stamp.exists():
   other=json.loads(other_stamp.read_text(encoding='utf-8'))
   if other.get('profile') != args.profile or other.get('profile_fingerprint') != PROFILE_FINGERPRINT:
    raise SystemExit(f'{core}: sibling {other_core} Build profile {other.get("profile")} does not match {args.profile}; clean both cores before switching profiles')
- if args.clean:
+ if clean_core:
+  if not args.clean: print(f'{core}: bundled ELF has no local build stamp; performing first-run clean build',flush=True)
   if (out/'obj').exists(): shutil.rmtree(out/'obj')
   for path in generated:
    if path.exists(): path.unlink()
@@ -48,8 +53,6 @@ for core in (['CPU0','CPU1'] if args.core=='all' else [args.core]):
   previous=json.loads(stamp.read_text(encoding='utf-8'))
   if previous.get('profile') != args.profile or previous.get('profile_fingerprint') != PROFILE_FINGERPRINT:
    raise SystemExit(f'{core}: existing Build profile {previous.get("profile")} does not match {args.profile}; rerun with --clean')
- elif any(path.exists() for path in generated[2:]):
-  raise SystemExit(f'{core}: generated artifacts have no build_profile.json; rerun with --clean')
  if core=='CPU0':
   # CPU0 is one link image: µT-Kernel RA FSP/ARMv8-M, lwIP/httpd and the
   # application gateway are source-linked here, not a side-by-side project.
@@ -97,7 +100,7 @@ for core in (['CPU0','CPU1'] if args.core=='all' else [args.core]):
   src=(base/source).resolve();obj=out/'obj'/Path(source.replace('../','shared/')).with_suffix('.o');obj.parent.mkdir(parents=True,exist_ok=True);stamp=obj.with_suffix('.sha256')
   opt=['-O2'] if source in HOT_O2 else []
   digest=hashlib.sha256(src.read_bytes()+header_hash+' '.join(opt).encode()).hexdigest()
-  if not args.clean and obj.exists() and stamp.exists() and stamp.read_text()==digest:return obj
+  if not clean_core and obj.exists() and stamp.exists() and stamp.read_text()==digest:return obj
   cxx=src.suffix in ['.cc','.cpp'];language=['-std=c++17'] if cxx else (['-std=c11'] if src.suffix=='.c' else (['-x','assembler-with-cpp'] if src.suffix=='.S' else []))
   file_flags=[('-O2' if f=='-Os' else f) for f in flags] if opt else flags
   try:run([tool/('clang++.exe' if cxx else 'clang.exe')]+file_flags+language+['-c',source,'-o',obj.relative_to(base)],base)
