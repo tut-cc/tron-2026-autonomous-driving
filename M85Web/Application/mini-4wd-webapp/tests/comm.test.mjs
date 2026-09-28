@@ -23,8 +23,7 @@ test('CommManager retries a retained request after an HTTP failure and serialize
 
     try {
         const manager = new CommManager({
-            getTransmitPayload: () => ({ mode_request: 'AUTO' }),
-            getTransmitContext: () => ({ modeRequest: 'AUTO' }),
+            nextRequest: () => ({ payload: { mode_request: 'AUTO' }, context: { pendingId: 1 } }),
             onHeartbeat: (data, context) => heartbeats.push({ data, context })
         });
         await new Promise(resolve => setImmediate(resolve));

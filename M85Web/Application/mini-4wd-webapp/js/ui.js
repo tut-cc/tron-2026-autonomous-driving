@@ -11,14 +11,12 @@ export class UIManager {
             dist:       $('distance-val'),
             btnMode:    $('btn-mode'),
             btnStop:    $('btn-stop'),
-            btnEstop:   $('btn-estop'),
             stopReason: $('stop-reason-text'),
             alert:      $('alert-banner'),
             tor:        $('tor-countdown')
         };
         this.el.btnMode?.addEventListener('click', () => this.cb.onDriveModeClick?.());
         this.el.btnStop?.addEventListener('click', () => this.cb.onStopClick?.());
-        this.el.btnEstop?.addEventListener('click', () => this.cb.onEstopClick?.());
         $('btn-takeover')?.addEventListener('click', () => this.cb.onTorTakeoverClick?.());
         $('camera')?.addEventListener('dragstart', (e) => e.preventDefault());
         try { navigator.wakeLock?.request('screen'); } catch (_) {}

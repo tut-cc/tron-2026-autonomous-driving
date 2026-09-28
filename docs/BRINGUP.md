@@ -55,9 +55,9 @@
 
 ## 制御の受入項目（全て実機未確認）
 
-- 起動時停止。MANUAL は Web の方向ボタンを押している間だけ、AUTO は Web の AUTO ボタンで開始。STOP/ESTOP で停止。
+- 起動時停止。MANUAL は Web の方向ボタンを押している間だけ、AUTO は Web の AUTO ボタンで開始。Web の ABORT（STOP）で停止し、RESET で再開。
 - ToF 100 mm以下で通常停止、50 mm以下で緊急停止、101 mm以上への復帰条件、100 msを超えるデータ途絶、センサー抜去・NACK・SDA固定。
-- ESTOPは基板リセットまでラッチされ、Web RESETやセンサー回復では解除されないこと。
+- Web画面の停止ボタンはABORTのみ（ESTOPボタンは2026-09-28に撤去。M33側のESTOPラッチ処理とプロトコルの `estop_request` は残している）。
 - AIの無効値、NaN、範囲外、古いseq、撮影から `AI_FRAME_MAX_AGE_MS`（600 ms）を超えた結果、AI停止。
 - Web手動指令・M85 heartbeatの300 ms途絶、IPC混雑・破損、正常値復帰後に自動で再発進しないこと。
 - カメラ設定連続要求中もToF測定が優先されること。IIC1異常時にカメラ待ちがタイムアウトし、モーターは停止を維持すること。

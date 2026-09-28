@@ -1,207 +1,167 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { StateMachine } from '../js/state-machine.js';
+import { StateMachine, Cmd, isFresh } from '../js/state-machine.js';
 import { UIState, ModeRequest } from '../js/constants.js';
 
-function createMachine() {
-    const rendered = [];
+const status = (web_seq, extra = {}) => ({
+    mode: 'MANUAL', armed: false, web_seq, tor_active: false, request_reject_reason: 'NONE', ...extra
+});
+
+/* A connected machine showing MANUAL at web_seq 0. */
+function setup() {
     const errors = [];
     const app = {
         input: {
             enabled: false,
-            setEnabled(enabled) { this.enabled = enabled; },
-            getThrottle() { return 0.8; },
-            getSteering() { return 0.2; },
-            getDeadman() { return true; },
+            setEnabled(v) { this.enabled = v; },
+            getThrottle: () => 0.8, getSteering: () => 0.2, getDeadman: () => true,
             reset() {}
         },
-        ui: {
-            renderState(state, data) { rendered.push({ state, data }); },
-            showError(message) { errors.push(message); }
-        }
+        ui: { renderState() {}, showError: (m) => errors.push(m) }
     };
-    const machine = new StateMachine(app);
-    machine.transitionTo(UIState.MANUAL);
-    return { machine, app, rendered, errors };
+    const m = new StateMachine(app);
+    m.handleConnect();
+    m.handleHeartbeat(status(0), {});
+    /* Send one POST and answer it with `reply` (a function of the payload or a status). */
+    const roundTrip = (reply) => {
+        const { payload, context } = m.nextRequest();
+        m.handleHeartbeat(typeof reply === 'function' ? reply(payload) : reply, context);
+        return payload;
+    };
+    return { m, app, errors, roundTrip };
 }
 
-const manual = (web_seq, extra = {}) => ({
-    mode: 'MANUAL', armed: false, web_seq, tor_active: false,
-    request_reject_reason: 'NONE', ...extra
-});
+function withMachine(fn) {
+    const t = setup();
+    try { fn(t); } finally { t.m.clearTimer(); }
+}
 
-test('AUTO stays pending through stale/neutral ACKs and retries the mode request', () => {
-    const { machine } = createMachine();
-    try {
-        machine.requestDriveModeToggle();
-        const first = machine.getTransmitPayload();
-        const firstContext = machine.getTransmitContext();
-        assert.equal(first.mode_request, ModeRequest.AUTO);
+test('MANUAL drives; any pending command locks the input', () => withMachine(({ m, app }) => {
+    assert.equal(m.state, UIState.MANUAL);
+    assert.equal(app.input.enabled, true);
+    let { payload } = m.nextRequest();
+    assert.deepEqual([payload.throttle, payload.steering, payload.deadman], [0.8, 0.2, true]);
+    assert.equal(payload.estop_request, false, 'no ESTOP button: always false');
 
-        machine.handleHeartbeat(manual(0), firstContext);
-        assert.equal(machine.state, UIState.AUTO_PENDING);
-        assert.equal(machine.getTransmitPayload().mode_request, ModeRequest.AUTO);
+    m.requestAbortAction();
+    assert.equal(app.input.enabled, false);
+    ({ payload } = m.nextRequest());
+    assert.deepEqual([payload.throttle, payload.steering, payload.deadman], [0, 0, false]);
+}));
 
-        const retryContext = machine.getTransmitContext();
-        machine.handleHeartbeat(manual(1), retryContext);
-        assert.equal(machine.state, UIState.AUTO_PENDING, 'web_seq progress alone is not AUTO success');
-        assert.equal(machine.getTransmitPayload().mode_request, ModeRequest.AUTO);
-    } finally { machine.clearTimer(); }
-});
+test('AUTO stays pending through stale and neutral replies, then completes on fresh mode=AUTO', () => withMachine(({ m, roundTrip }) => {
+    m.requestDriveModeToggle();
+    assert.equal(m.state, UIState.AUTO_PENDING);
+    assert.equal(roundTrip(status(0)).mode_request, ModeRequest.AUTO);           // stale
+    assert.equal(m.state, UIState.AUTO_PENDING);
+    roundTrip(status(1));                                                         // fresh, still MANUAL
+    assert.equal(m.state, UIState.AUTO_PENDING, 'web_seq progress alone is not AUTO success');
+    assert.equal(roundTrip(status(2, { mode: 'AUTO', armed: true })).mode_request, ModeRequest.AUTO);
+    assert.equal(m.state, UIState.AUTO);
+    assert.equal(m.pending, null);
+    assert.equal(m.nextRequest().payload.client_mode, 'AUTO');
+}));
 
-test('fresh status mode AUTO completes; a fresh explicit rejection returns to MANUAL', () => {
-    const success = createMachine().machine;
-    try {
-        success.requestDriveModeToggle();
-        success.getTransmitPayload();
-        const context = success.getTransmitContext();
-        success.handleHeartbeat({ ...manual(1), mode: 'AUTO', armed: true }, context);
-        assert.equal(success.state, UIState.AUTO);
-        assert.equal(success.pendingModeRequest, ModeRequest.NONE);
-    } finally { success.clearTimer(); }
-
-    const rejected = createMachine();
-    try {
-        rejected.machine.requestDriveModeToggle();
-        rejected.machine.getTransmitPayload();
-        const context = rejected.machine.getTransmitContext();
-        rejected.machine.handleHeartbeat(manual(1, { request_reject_reason: 'SENSOR_NOT_READY' }), context);
-        assert.equal(rejected.machine.state, UIState.MANUAL);
-        assert.equal(rejected.machine.pendingModeRequest, ModeRequest.NONE);
-        assert.equal(rejected.app.input.enabled, true);
-        assert.match(rejected.errors.at(-1), /切替拒否/);
-        assert.match(rejected.errors.at(-1), /ToF/);
-    } finally { rejected.machine.clearTimer(); }
-
-    for (const [reason, text] of [['LINK_NOT_READY', /通信/], ['PATH_NOT_READY', /走行路/]]) {
-        const r = createMachine();
-        try {
-            r.machine.requestDriveModeToggle();
-            r.machine.getTransmitPayload();
-            const ctx = r.machine.getTransmitContext();
-            r.machine.handleHeartbeat(manual(1, { request_reject_reason: reason }), ctx);
-            assert.equal(r.machine.state, UIState.MANUAL);
-            assert.match(r.errors.at(-1), text);
-        } finally { r.machine.clearTimer(); }
+test('a fresh rejection shows the reason and returns to MANUAL', () => {
+    for (const [reason, text] of [['SENSOR_NOT_READY', /ToF/], ['LINK_NOT_READY', /通信/], ['PATH_NOT_READY', /走行路/]]) {
+        withMachine(({ m, app, errors, roundTrip }) => {
+            m.requestDriveModeToggle();
+            roundTrip(status(1, { request_reject_reason: reason }));
+            assert.equal(m.state, UIState.MANUAL);
+            assert.equal(app.input.enabled, true);
+            assert.match(errors.at(-1), /切替拒否/);
+            assert.match(errors.at(-1), text);
+        });
     }
+    withMachine(({ m, roundTrip }) => {
+        m.requestDriveModeToggle();
+        roundTrip(status(1, { request_reject_reason: 'PATH_NOT_READY', armed: true }));
+        assert.equal(m.state, UIState.AUTO_MANUAL_PENDING, 'rejected but still armed: ask for MANUAL');
+    });
 });
 
-test('an old in-flight response cannot acknowledge a mode request clicked later', () => {
-    const { machine } = createMachine();
-    try {
-        machine.getTransmitPayload();
-        const oldContext = machine.getTransmitContext();
-        machine.requestDriveModeToggle();
-        machine.handleHeartbeat({ ...manual(0), mode: 'AUTO', armed: true }, oldContext);
-        assert.equal(machine.state, UIState.AUTO_PENDING);
-        assert.equal(machine.pendingModeRequest, ModeRequest.AUTO);
-    } finally { machine.clearTimer(); }
-});
+test('a response to a POST sent before the click cannot confirm it', () => withMachine(({ m }) => {
+    const { context } = m.nextRequest();
+    m.requestDriveModeToggle();
+    m.handleHeartbeat(status(5, { mode: 'AUTO', armed: true }), context);
+    assert.equal(m.pending?.kind, Cmd.AUTO);
+}));
 
-test('timeout cancels AUTO and only unlocks after fresh MANUAL + unarmed status', () => {
-    const { machine, app } = createMachine();
-    try {
-        machine.requestDriveModeToggle();
-        machine.getTransmitPayload();
-        machine.expireAutoRequest();
-        assert.equal(machine.state, UIState.AUTO_MANUAL_PENDING);
+test('AUTO timeout switches to MANUAL, which unlocks only on fresh MANUAL + unarmed', () => withMachine(({ m, app, errors, roundTrip }) => {
+    m.requestDriveModeToggle();
+    m.onTimeout();
+    assert.match(errors.at(-1), /タイムアウト/);
+    assert.equal(m.state, UIState.AUTO_MANUAL_PENDING);
 
-        let payload = machine.getTransmitPayload();
-        let context = machine.getTransmitContext();
-        assert.equal(payload.mode_request, ModeRequest.MANUAL);
-        assert.equal(payload.client_mode, 'MANUAL');
-        assert.equal(payload.deadman, false);
-        assert.equal(payload.throttle, 0);
+    const p = roundTrip(status(0));
+    assert.deepEqual([p.mode_request, p.client_mode, p.deadman, p.throttle], [ModeRequest.MANUAL, 'MANUAL', false, 0]);
+    assert.equal(m.state, UIState.AUTO_MANUAL_PENDING, 'stale snapshot');
+    roundTrip(status(1, { armed: true }));
+    assert.equal(m.state, UIState.AUTO_MANUAL_PENDING, 'armed MANUAL is not safe to unlock');
+    roundTrip(status(2));
+    assert.equal(m.state, UIState.MANUAL);
+    assert.equal(app.input.enabled, true);
+}));
 
-        machine.handleHeartbeat(manual(0), context);
-        assert.equal(machine.state, UIState.AUTO_MANUAL_PENDING, 'pre-request MANUAL snapshot is stale');
-        payload = machine.getTransmitPayload();
-        context = machine.getTransmitContext();
-        machine.handleHeartbeat(manual(1, { armed: true }), context);
-        assert.equal(machine.state, UIState.AUTO_MANUAL_PENDING, 'MANUAL while armed is not safe to unlock');
+test('TOR take-over and the mode button in AUTO ask for MANUAL', () => withMachine(({ m, roundTrip }) => {
+    m.handleHeartbeat(status(0, { mode: 'AUTO', armed: true, tor_active: true }), {});
+    assert.equal(m.state, UIState.AUTO_TOR);
+    m.requestTorTakeover();
+    assert.equal(m.state, UIState.TOR_MANUAL_PENDING);
+    roundTrip(status(1));
+    assert.equal(m.state, UIState.MANUAL);
 
-        payload = machine.getTransmitPayload();
-        context = machine.getTransmitContext();
-        machine.handleHeartbeat(manual(2), context);
-        assert.equal(machine.state, UIState.MANUAL);
-        assert.equal(machine.pendingModeRequest, ModeRequest.NONE);
-        assert.equal(app.input.enabled, true);
-    } finally { machine.clearTimer(); }
-});
+    m.handleHeartbeat(status(1, { mode: 'AUTO', armed: true }), {});
+    m.requestDriveModeToggle();
+    assert.equal(m.state, UIState.AUTO_MANUAL_PENDING);
+}));
 
-test('STOP/ESTOP remain latched, suppress MODE, and Web reset cannot clear Emergency', () => {
-    const { machine } = createMachine();
-    try {
-        machine.requestDriveModeToggle();
-        machine.getTransmitPayload();
-        machine.requestEstop();
-        let payload = machine.getTransmitPayload();
-        let context = machine.getTransmitContext();
-        assert.equal(payload.estop_request, true);
-        assert.equal(payload.mode_request, ModeRequest.NONE);
-        assert.equal(payload.throttle, 0);
+test('ABORT preempts a mode request and is re-sent until a fresh unarmed status', () => withMachine(({ m, roundTrip }) => {
+    m.requestDriveModeToggle();
+    m.requestAbortAction();
+    let p = roundTrip(status(0, { mode: 'AUTO', armed: true }));
+    assert.deepEqual([p.manual_abort_request, p.mode_request], [true, ModeRequest.NONE]);
+    p = roundTrip(status(0));
+    assert.equal(p.manual_abort_request, true);
+    assert.equal(m.pending?.kind, Cmd.STOP, 'unchanged web_seq may be a stale snapshot');
+    p = roundTrip(status(1));
+    assert.equal(p.manual_abort_request, true);
+    assert.equal(m.pending, null);
+    assert.equal(m.state, UIState.MANUAL, 'M33 stop selects MANUAL: no extra MANUAL request');
+    assert.equal(m.nextRequest().payload.manual_abort_request, false);
+}));
 
-        machine.handleHeartbeat(manual(0), context);
-        assert.equal(machine.pendingEstop, true, 'manual/unarmed is not proof of ESTOP');
-        payload = machine.getTransmitPayload();
-        context = machine.getTransmitContext();
-        assert.equal(payload.estop_request, true, 'failed/stale response leaves ESTOP for retry');
-        machine.handleHeartbeat({ ...manual(0), mode: 'MANUAL_ABORT' }, context);
-        assert.equal(machine.pendingEstop, true, 'an old ABORT snapshot cannot acknowledge this ESTOP');
-        payload = machine.getTransmitPayload();
-        context = machine.getTransmitContext();
-        assert.equal(payload.estop_request, true, 'ESTOP still retries after an old ABORT snapshot');
-        machine.handleHeartbeat(manual(1), context); // M33 may auto-clear an obstacle-free ESTOP on its next tick.
-        assert.equal(machine.pendingEstop, false);
-        assert.equal(machine.state, UIState.MANUAL, 'fresh MANUAL + unarmed status confirms the stop was applied');
+test('RESET on the abort screen does not clear an M33 Emergency', () => withMachine(({ m, roundTrip }) => {
+    m.handleHeartbeat(status(0, { mode: 'MANUAL_ABORT' }), {});
+    assert.equal(m.state, UIState.MANUAL_ABORT);
+    m.requestAbortAction();
+    let p = roundTrip(status(0, { mode: 'MANUAL_ABORT' }));
+    assert.deepEqual([p.reset_abort_request, p.client_mode], [true, 'MANUAL_ABORT']);
+    assert.equal(m.pending?.kind, Cmd.RESET, 'stale snapshot cannot confirm RESET');
+    roundTrip(status(1, { mode: 'MANUAL_ABORT' }));
+    assert.equal(m.pending, null);
+    assert.equal(m.state, UIState.MANUAL_ABORT);
+}));
 
-        machine.transitionTo(UIState.MANUAL_ABORT);
-        machine.requestAbortAction();
-        payload = machine.getTransmitPayload();
-        context = machine.getTransmitContext();
-        assert.equal(payload.reset_abort_request, true);
-        machine.handleHeartbeat({ ...manual(1), mode: 'MANUAL_ABORT' }, context);
-        assert.equal(machine.pendingResetAbort, true, 'old Emergency snapshot cannot acknowledge a new Web reset');
-        payload = machine.getTransmitPayload();
-        context = machine.getTransmitContext();
-        machine.handleHeartbeat({ ...manual(2), mode: 'MANUAL_ABORT' }, context);
-        assert.equal(machine.state, UIState.MANUAL_ABORT, 'reset request does not clear the M33 Emergency latch');
-        assert.equal(machine.pendingResetAbort, false);
-    } finally { machine.clearTimer(); }
-});
+test('an ABORT status from M33 cancels a pending mode switch', () => withMachine(({ m }) => {
+    m.requestDriveModeToggle();
+    m.handleHeartbeat(status(0, { mode: 'AUTO_ABORT' }), {});
+    assert.equal(m.pending, null);
+    assert.equal(m.state, UIState.AUTO_ABORT);
+}));
 
-test('manual abort preempts MODE and is retained until a safe response', () => {
-    const { machine } = createMachine();
-    try {
-        machine.requestDriveModeToggle();
-        machine.requestAbortAction();
-        let payload = machine.getTransmitPayload();
-        let context = machine.getTransmitContext();
-        assert.equal(payload.manual_abort_request, true);
-        assert.equal(payload.mode_request, ModeRequest.NONE);
-
-        machine.handleHeartbeat(manual(0), { modeRequest: ModeRequest.NONE });
-        assert.equal(machine.pendingManualAbort, true, 'a response to an older flight cannot clear STOP');
-        payload = machine.getTransmitPayload();
-        context = machine.getTransmitContext();
-        machine.handleHeartbeat(manual(0), context);
-        assert.equal(machine.pendingManualAbort, true, 'safe but unchanged sequence may be a stale snapshot');
-        payload = machine.getTransmitPayload();
-        context = machine.getTransmitContext();
-        assert.equal(payload.manual_abort_request, true, 'STOP is retried until status advances');
-        machine.handleHeartbeat(manual(1), context);
-        assert.equal(machine.pendingManualAbort, false);
-        assert.equal(machine.pendingModeRequest, ModeRequest.MANUAL);
-        payload = machine.getTransmitPayload();
-        assert.equal(payload.mode_request, ModeRequest.MANUAL);
-        assert.equal(payload.manual_abort_request, false);
-    } finally { machine.clearTimer(); }
-});
+test('disconnect during AUTO request turns it into a MANUAL request', () => withMachine(({ m, errors }) => {
+    m.requestDriveModeToggle();
+    m.handleDisconnect();
+    assert.equal(m.state, UIState.DISCONNECTED);
+    assert.match(errors.at(-1), /通信切断/);
+    m.handleConnect();
+    assert.equal(m.state, UIState.AUTO_MANUAL_PENDING);
+}));
 
 test('web_seq comparison handles uint32 wraparound', () => {
-    const { machine } = createMachine();
-    try {
-        assert.equal(machine.hasFreshWebStatus({ web_seq: 0 }, { baselineWebSeq: 0xffffffff }), true);
-        assert.equal(machine.hasFreshWebStatus({ web_seq: 0xffffffff }, { baselineWebSeq: 0 }), false);
-    } finally { machine.clearTimer(); }
+    assert.equal(isFresh(0, 0xffffffff), true);
+    assert.equal(isFresh(0xffffffff, 0), false);
+    assert.equal(isFresh(3, 3), false);
+    assert.equal(isFresh(undefined, 0), false);
 });

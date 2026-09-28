@@ -3,7 +3,7 @@
 本ドキュメントでは、WebApp と 車載マイコン間の対話フローを、正常系・異常系・フェイルセーフの各シナリオにおけるシーケンス図として示します。
 
 > [!NOTE]
-> WebApp と 車載マイコン間の制御・状態同期は、100ms周期の **HTTP Keep-Alive 永続接続ポーリング (`POST /api/command`)** により行われます。
+> WebApp と 車載マイコン間の制御・状態同期は、100ms周期の **HTTP Keep-Alive 永続接続ポーリング (`POST /api/control`)** により行われます。
 > WebAppが送信するリクエストボディに操作コマンドが含まれ、マイコンからのレスポンスボディ (200 OK) に最新テレメトリ (Heartbeat相当) が含まれます。
 > 以下のシーケンス図では、理解を容易にするため「WebAppからのコマンド送信（リクエスト）」と「マイコンからの状態返信（レスポンス）」として対話を描いています。
 
@@ -242,9 +242,9 @@ sequenceDiagram
     end
 
     Note over W, M: 【通信回復・再接続】
-    Note over W: WebAppは定周期で POST /api/command を試行継続
+    Note over W: WebAppは定周期で POST /api/control を試行継続
 
-    W->>M: POST /api/command (ポーリング試行)
+    W->>M: POST /api/control (ポーリング試行)
     M-->>W: 200 OK (mode=AUTO_ABORT, stop_reason=COMM_TIMEOUT)
     W->>W: DISCONNECTED から CONNECTED へ復帰<br/>マイコンの最新状態 AUTO_ABORT を同期反映<br/>通知表示: 通信切断により自律中断しました
 ```

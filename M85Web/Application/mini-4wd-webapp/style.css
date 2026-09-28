@@ -168,7 +168,6 @@ html, body {
         width: clamp(72px, 10vw, 92px); background: #000; color: #fff; font-weight: 900;
         &:active { background: #555; }
       }
-      &.btn-estop { width: clamp(74px, 10vw, 92px); min-height: 48px; background: #b00020; color: #fff; border-color: #720014; }
     }
   }
 }
@@ -181,8 +180,7 @@ html, body {
   .bottom-bar { align-items: flex-end; }
   .bottom-bar .action-row { flex-direction: column; gap: 6px; }
   .bottom-bar .action-row .action-btn,
-  .bottom-bar .action-row .action-btn.btn-stop,
-  .bottom-bar .action-row .action-btn.btn-estop {
+  .bottom-bar .action-row .action-btn.btn-stop {
     width: clamp(112px, 32vw, 156px); min-height: 46px; font-size: 0.92rem;
   }
   .bottom-bar #stop-reason { max-width: min(42vw, 190px); }

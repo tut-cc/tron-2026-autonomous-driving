@@ -19,7 +19,7 @@ The integrated CPU0 image contains lwIP HTTPD, a static-file bundle, and a contr
 - `CPU0/src/frame_stream.c` makes the resized BMP in the low-priority video task (priority 20). A separate, lower-priority USB task (priority 22) drains a one-frame best-effort diagnostic queue; when that queue is busy USB frames are dropped while HTTP snapshots continue. The HTTP/TCP task does not resize or encode images, and video transfer does not own motor GPIO.
 - `interface/controller_if.c` owns the request/response mailbox shared with the M85 gateway.
 - M33 `control_runtime` and the board motor-output driver own safety decisions and motor GPIO/PWM. Selecting MANUAL or AUTO at boot does not cause automatic drive; a valid deadman and local start conditions are required.
-- The former loopback test task (`control_test_task`) was removed; the M85 gateway is the only consumer of the control mailbox. PC mock/sample code under `mini-4wd-webapp` is not part of the embedded asset bundle.
+- The former loopback test task (`control_test_task`) was removed; the M85 gateway is the only consumer of the control mailbox. The PC mock server was removed (2026-09-28); the C sample under `mini-4wd-webapp/sample` is not part of the embedded asset bundle.
 
 ## Regenerating embedded UI
 

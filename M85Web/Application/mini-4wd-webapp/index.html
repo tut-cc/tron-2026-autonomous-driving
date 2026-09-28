@@ -36,7 +36,7 @@
 
   <div id="alert-banner" popover="manual">エラー通知</div>
 
-  <!-- 操作フッター (左右パッド / 中断理由 / モード切替 / ABORT / ESTOP) -->
+  <!-- 操作フッター (左右パッド / 中断理由 / モード切替 / ABORT) -->
   <footer class="bottom-bar">
     <div id="pad-steer" class="pad pad-steer" role="group" aria-label="左右（右手）">
       <button type="button" id="pad-left" class="pad-btn pad-left" data-dir="left" aria-label="左">
@@ -50,7 +50,6 @@
     <div class="action-row">
       <button id="btn-mode" class="action-btn">MANUAL MODE</button>
       <button id="btn-stop" class="action-btn btn-stop">ABORT</button>
-      <button id="btn-estop" class="action-btn btn-estop" type="button">ESTOP</button>
     </div>
   </footer>
 
@@ -70,7 +69,7 @@
       <div class="spinner"></div>
       <h2>DISCONNECTED</h2>
       <p>サーバーに接続しています...</p>
-      <p class="muted">マイコンまたは mock_server.py の起動を確認してください</p>
+      <p class="muted">マイコンの起動とネットワーク接続を確認してください</p>
     </div>
   </div>
 
@@ -94,7 +93,6 @@
       <li><strong>走行操作（ラジコン式）:</strong> 左手で前進ボタン（画面左下）、右手で ◀ / ▶（画面右）。同時に押すと曲がりながら進む。キーボードは ↑ / W で前進、← / → または A / D で左右</li>
       <li><strong>自動運転:</strong> AUTO MODE ボタンで切替要求</li>
       <li><strong>手動停止:</strong> ABORT ボタンで即時停止</li>
-      <li><strong>緊急停止:</strong> ESTOP ボタン。基板をリセットするまで解除されません</li>
       <li><strong>後退:</strong> 安全上、後退操作は提供していません</li>
       <li><strong>UI調整デバッグ:</strong> <code>Ctrl+Shift+D</code> / <code>\`</code> / <code>F2</code> またはステータスバッジを3回タップ</li>
     </ul>
