@@ -5,6 +5,7 @@
 #include "dualcore_board.h"
 #include "user_config.h"
 #include "m85_gateway_runtime.h"
+#include "web_control_adapter.h"
 static uint32_t g_perception_seq;
 static unsigned g_initialized;
 /* Debugger-visible snapshots.  Updated by the camera task without I/O. */
@@ -13,6 +14,13 @@ volatile uint32_t g_ai_car_count;
 volatile uint32_t g_ai_navigation_stop_reason;
 volatile uint32_t g_ai_processing_time_ms;
 volatile uint32_t g_ai_submit_failures;
+/* Person/car alarm for the Web UI, one 32-bit word so the gateway task reads
+ * it atomically: see AUTONOMY_ALARM_* in autonomy_controller.h. */
+static volatile uint32_t g_obstacle_alarm_word;
+static uint32_t g_obstacle_alarm_quiet_frames;
+/* Frames without a detection before the alarm ends, so one missed frame does
+ * not log the same person twice. */
+#define OBSTACLE_ALARM_CLEAR_FRAMES (3U)
 uint32_t autonomy_controller_now_ms(void) {
  uint32_t now=0xffffffffU;
  /* Capture ISR reads the published clock without taking HSEM or using producer. */
@@ -62,19 +70,62 @@ static float detection_corridor_overlap(obstacle_detection_t const * detection,
                        1.0F);
 }
 
-static void add_synthetic_obstacle(ai_perception_result_t * perception, float confidence)
+/* Same person/car criterion as the M33 (ai_control_signals.h). */
+static uint32_t obstacle_alarm_kinds(road_navigation_result_t const * navigation,
+                                     obstacle_detector_result_t const * detections,
+                                     uint16_t width)
 {
-    if (perception->obstacle_count >= AI_CONTROL_MAX_OBSTACLES)
+    uint32_t kinds = 0U;
+    if ((NULL == navigation) || (NULL == detections) || (0U == width))
     {
-        perception->obstacle_count = AI_CONTROL_MAX_OBSTACLES - 1U;
+        return 0U;
     }
+    uint32_t count = detections->detection_count;
+    if (count > OBSTACLE_DETECTOR_MAX_DETECTIONS)
+    {
+        count = OBSTACLE_DETECTOR_MAX_DETECTIONS;
+    }
+    for (uint32_t index = 0U; index < count; index++)
+    {
+        obstacle_detection_t const * detection = &detections->detections[index];
+        uint32_t kind = (OBSTACLE_CLASS_PERSON == detection->class_id) ? AUTONOMY_ALARM_PERSON :
+                        (OBSTACLE_CLASS_CAR == detection->class_id) ? AUTONOMY_ALARM_CAR : 0U;
+        if ((0U != kind) &&
+            (detection->score_per_mille >= AI_OBSTACLE_CONFIDENCE_MIN_PER_MILLE) &&
+            (detection_corridor_overlap(detection, width, navigation->target_x) * 1000.0F >=
+             (float) AI_OBSTACLE_OVERLAP_MIN_PER_MILLE))
+        {
+            kinds |= kind;
+        }
+    }
+    return kinds;
+}
 
-    ai_obstacle_result_t * obstacle =
-        &perception->obstacles[perception->obstacle_count++];
-    obstacle->confidence = confidence;
-    obstacle->corridor_overlap = 1.0F;
-    obstacle->center_x = 0.0F;
-    obstacle->bbox_bottom = 1.0F;
+/* Camera task only.  A new alarm (quiet -> seen) increments the sequence;
+ * the Web UI adds one log line per sequence value. */
+static void obstacle_alarm_update(uint32_t kinds)
+{
+    uint32_t word = g_obstacle_alarm_word;
+    uint32_t seq = word >> AUTONOMY_ALARM_SEQ_SHIFT;
+    if (0U != kinds)
+    {
+        if (0U == (word & AUTONOMY_ALARM_ACTIVE))
+        {
+            ++seq;
+        }
+        g_obstacle_alarm_quiet_frames = 0U;
+        g_obstacle_alarm_word = (seq << AUTONOMY_ALARM_SEQ_SHIFT) | AUTONOMY_ALARM_ACTIVE | kinds;
+    }
+    else if ((0U != (word & AUTONOMY_ALARM_ACTIVE)) &&
+             (++g_obstacle_alarm_quiet_frames >= OBSTACLE_ALARM_CLEAR_FRAMES))
+    {
+        g_obstacle_alarm_word = seq << AUTONOMY_ALARM_SEQ_SHIFT;
+    }
+}
+
+uint32_t autonomy_controller_obstacle_alarm(void)
+{
+    return g_obstacle_alarm_word;
 }
 
 static void make_perception(ai_perception_result_t * perception,
@@ -180,11 +231,9 @@ static void make_perception(ai_perception_result_t * perception,
             0.0F,
             1.0F);
     }
-
-    if (NAVIGATION_STOP_AI_OBJECT_AHEAD == navigation->stop_reason)
-    {
-        add_synthetic_obstacle(perception, 1.0F);
-    }
+    /* NAVIGATION_STOP_AI_OBJECT_AHEAD no longer adds a synthetic "touching"
+     * obstacle (2026-09-28): the real detections above carry their own
+     * position, and the M33 decides the hand-over distance with the ToF. */
 }
 
 void autonomy_controller_update(road_navigation_result_t const * nav,
@@ -224,6 +273,7 @@ void autonomy_controller_update(road_navigation_result_t const * nav,
     g_ai_car_count = car_count;
     g_ai_navigation_stop_reason = nav ? nav->stop_reason : NAVIGATION_STOP_INVALID_INPUT;
     g_ai_processing_time_ms = result.processing_time_ms;
+    obstacle_alarm_update(obstacle_alarm_kinds(nav, det, w));
     /* A rejected submit needs no extra action: the M33 treats missing AI
      * frames as stale (AUTO -> TOR) on its own. */
     if (!m85_gateway_runtime_submit_ai(&result))
@@ -242,6 +292,7 @@ void autonomy_controller_report_ai_unavailable(void)
     ai_perception_result_t result;
     /* NULL inputs produce path_valid=0 / obstacle_valid=0. */
     make_perception(&result, NULL, NULL, 0U, 0U, now);
+    obstacle_alarm_update(0U);
     (void) m85_gateway_runtime_submit_ai(&result);
 }
 

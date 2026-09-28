@@ -24,6 +24,10 @@ void autonomy_controller_update(road_navigation_result_t const * navigation,
  * path_valid=0 and obstacle_valid=0: the M33 turns an AUTO run into TOR, and
  * MANUAL driving (protected by ToF and deadman) is not affected. */
 void autonomy_controller_report_ai_unavailable(void);
+/* Person/car alarm for the Web UI (not a stop: the M33 decides TOR with the
+ * ToF).  Packed word (AUTONOMY_ALARM_* in web_control_adapter.h), read
+ * atomically by the gateway task. */
+uint32_t autonomy_controller_obstacle_alarm(void);
 /* Hook called by ethosu_semaphore_take() (ra/npu/.../ethosu_driver.c) while
  * the camera task spins on the NPU.  IPC and heartbeat are now serviced by the
  * uT-Kernel gateway task (m85_gateway_task.c), which preempts this wait, so

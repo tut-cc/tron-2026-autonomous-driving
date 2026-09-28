@@ -63,10 +63,26 @@ typedef struct
     /* Curve slowdown: speed x (1 - curve_slowdown x |steering| / max_steering). */
     float curve_slowdown;
 
-    float obstacle_confidence_stop;
-    float obstacle_overlap_stop;
-    float obstacle_bottom_stop;
+    /* Person/car obstacle (2026-09-28): an obstacle counts when it meets
+     * both minimums.  It only slows the car down until it is within
+     * obstacle_tor_mm on the ToF (or its box reaches obstacle_bottom_tor of
+     * the image height, for objects below the ToF beam); then the follower
+     * reports CONTROL_REASON_OBSTACLE_IN_CORRIDOR and the M33 enters TOR. */
+    float obstacle_confidence_min;
+    float obstacle_overlap_min;
+    float obstacle_bottom_tor;
+    uint16_t obstacle_tor_mm;
     float obstacle_slowdown_gain;
+
+    /* Automatic wheel-balance trim (2026-09-28): a slow integral of the raw
+     * steering error learns the constant correction that unequal motors need,
+     * so a straight strip is driven straight without a per-car constant.
+     * Updated once per camera frame while the road is nearly straight; kept
+     * across stops (reset only by control_motor_init()). */
+    float steering_trim_initial;  /* start value (e.g. a value read earlier) */
+    float steering_trim_rate;     /* fraction of the raw error added per frame */
+    float steering_trim_limit;    /* |trim| cap                               */
+    float steering_trim_heading_gate; /* learn only while |heading| <= this    */
 
     uint8_t good_frames_to_auto;
     uint8_t allow_reverse;
@@ -114,6 +130,13 @@ typedef struct
     uint8_t steering_valid;
     uint32_t steering_ai_seq;
     float steering_filtered;
+
+    /* Learned wheel-balance trim (see steering_trim_*).  Positive = more
+     * left-wheel command, i.e. corrects a car that drifts left. */
+    float steering_trim;
+    /* Set by the owner before each update: learn the trim only while the
+     * vehicle is really driving in AUTO (not in MANUAL, not stopped). */
+    uint8_t trim_learning;
 } control_motor_t;
 
 void control_motor_default_config(control_motor_config_t * config);

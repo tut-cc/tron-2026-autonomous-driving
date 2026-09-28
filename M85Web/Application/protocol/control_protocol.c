@@ -10,9 +10,12 @@ const char *const control_stops[STOP_REASON_COUNT] = {
 const char *const control_rejects[REQUEST_REJECT_COUNT] = {
     "NONE", "SENSOR_NOT_READY", "OBSTACLE_NEAR", "IN_TOR", "IN_MANUAL_ABORT", "MODE_MISMATCH",
     "LINK_NOT_READY", "PATH_NOT_READY"};
+const char *const control_obstacle_kinds[OBSTACLE_KIND_COUNT] = {
+    "NONE", "PERSON", "CAR", "PERSON_AND_CAR"};
 /* A missing initializer would leave a NULL entry; catch it at compile time. */
 _Static_assert(COUNT_OF(control_modes) == 4 && COUNT_OF(control_requests) == 3 &&
-                   COUNT_OF(control_stops) == 11 && COUNT_OF(control_rejects) == 8,
+                   COUNT_OF(control_stops) == 11 && COUNT_OF(control_rejects) == 8 &&
+                   COUNT_OF(control_obstacle_kinds) == 4,
                "wire-name tables must match the enums");
 static const char *lookup(const char *const *names, unsigned count, unsigned value)
 {

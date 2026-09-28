@@ -143,75 +143,89 @@ static void test_core(void) {
     a=ai(0,5);assert(vc_ai(&v,&a,5)==0); /* seq and clock wrap */
     puts("PASS control: MANUAL boot, D-pad drive/release, no-reverse, web fail-safe, ToF 100mm stop / 50mm emergency + hysteresis, ESTOP latched until reset, AUTO start/stop, wrap");
 }
-static void test_ai_corridor_emergency(void) {
-    vc_t v;control_motor_output_t o;ai_perception_result_t a;tof_safety_result_t t;
-    boot(&v);
-    assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0&&v.status.armed);
-
-    /* Synthetic person/car-like detection in the forward safety corridor. */
-    a=ai(4,40);a.obstacle_count=1;
-    a.obstacles[0]=(ai_obstacle_result_t){.confidence=.95F,.corridor_overlap=.9F,
-        .center_x=0.0F,.bbox_bottom=.9F};
-    t=(tof_safety_result_t){4,40,500,1,0};
-    assert(vc_ai(&v,&a,40)==0&&vc_tof(&v,&t,40)==0);vc_link(&v,40);
-    vc_step(&v,40,&o);
-    assert(!o.motor_enable&&o.left_command==0.0F&&o.right_command==0.0F);
-    assert(!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_AI_OBSTACLE);
-
-    /* Web STOP/reset cannot clear an AI emergency while the obstacle remains. */
-    assert(web(&v,VC_WEB_STOP,VC_MODE_MANUAL,0,0,0,45)==0);
-    vc_step(&v,50,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY);
-
-    /* Clear requires good_frames_to_auto (2) healthy new AI frames; clearing
-     * never re-arms. */
-    feed(&v,5,60);vc_step(&v,60,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY);
-    feed(&v,6,70);vc_step(&v,70,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_STOPPED);
-    feed(&v,7,80);vc_step(&v,80,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_STOPPED);
-    feed(&v,8,90);vc_step(&v,90,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_STOPPED);
-
-    /* An explicit ESTOP upgrades an existing AI emergency and stays latched
-     * after the camera reports a clear path again. */
-    boot(&v);
-    assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0&&v.status.armed);
-    a=ai(4,40);a.obstacle_count=1;
-    a.obstacles[0]=(ai_obstacle_result_t){.confidence=.95F,.corridor_overlap=.9F,
-        .center_x=0.0F,.bbox_bottom=.9F};
-    t=(tof_safety_result_t){4,40,500,1,0};
-    assert(vc_ai(&v,&a,40)==0&&vc_tof(&v,&t,40)==0);vc_link(&v,40);
-    vc_step(&v,40,&o);assert(v.status.reason==VC_AI_OBSTACLE);
-    assert(web(&v,VC_WEB_ESTOP,VC_MODE_MANUAL,0,0,0,55)==0);
-    assert(v.status.reason==VC_ESTOP&&v.status.state==VC_EMERGENCY);
-    feed(&v,5,60);vc_step(&v,60,&o);
-    feed(&v,6,70);vc_step(&v,70,&o);
-    feed(&v,7,80);vc_step(&v,80,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_ESTOP);
-
-    /* A close person/car can hide the road, but path_valid=0 must not mask
-     * the fresh corridor obstacle.  The same M33 safety path protects MANUAL. */
-    boot(&v);
-    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,40)==0&&v.status.armed);
-    a=ai(4,50);a.path_valid=0;a.obstacle_count=1;
-    a.obstacles[0]=(ai_obstacle_result_t){.confidence=.95F,.corridor_overlap=.9F,
-        .center_x=0.0F,.bbox_bottom=.9F};
-    t=(tof_safety_result_t){4,50,500,1,0};
-    assert(vc_ai(&v,&a,50)==0&&vc_tof(&v,&t,50)==0);vc_link(&v,50);
-    vc_step(&v,50,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_AI_OBSTACLE);
-
-    /* No detected hazard: MANUAL's ToF/deadman policy is unchanged even if
-     * the autonomous road path is not visible. */
-    boot(&v);
-    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,40)==0&&v.status.armed);
-    a=ai(4,50);a.path_valid=0;
-    t=(tof_safety_result_t){4,50,500,1,0};
-    assert(vc_ai(&v,&a,50)==0&&vc_tof(&v,&t,50)==0);vc_link(&v,50);
-    vc_step(&v,50,&o);
-    assert(o.motor_enable&&v.status.armed&&v.status.state==VC_MANUAL);
+static void auto_running(vc_t *v, uint32_t *now, uint32_t *seq);
+/* 2026-09-28 demo layout: a person/car in the corridor is an alarm (M85) and
+ * a slowdown; AUTO hands over (TOR) only within VC_OBSTACLE_TOR_MM on the ToF
+ * or when the box reaches the bottom of the image.  MANUAL ignores it. */
+static void obstacle_frame(vc_t *v,uint32_t seq,uint32_t now,uint16_t tof_mm,
+                           float conf,float overlap,float bottom) {
+    ai_perception_result_t a=ai(seq,now);tof_safety_result_t t={seq,now,tof_mm,1,0};
+    a.obstacle_count=1;
+    a.obstacles[0]=(ai_obstacle_result_t){.confidence=conf,.corridor_overlap=overlap,
+        .center_x=0.0F,.bbox_bottom=bottom};
+    assert(vc_ai(v,&a,now)==0&&vc_tof(v,&t,now)==0);vc_link(v,now);
+}
+static void test_obstacle_tor(void) {
+    vc_t v;control_motor_output_t o;uint32_t now,seq;unsigned i;
+    /* Far person in the corridor: keep driving (slower), no stop. */
+    auto_running(&v,&now,&seq);
+    for(i=0;i<5;++i){now+=10;obstacle_frame(&v,++seq,now,500,.95F,.9F,.6F);vc_step(&v,now,&o);}
+    assert(o.motor_enable&&v.status.armed&&v.status.state==VC_AUTO);
+    /* Within VC_OBSTACLE_TOR_MM: TOR with its own reason, output 0 at once. */
+    now+=10;obstacle_frame(&v,++seq,now,VC_OBSTACLE_TOR_MM,.95F,.9F,.6F);vc_step(&v,now,&o);
+    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_TOR);
+    assert(v.status.mode==VC_MODE_AUTO&&v.status.reason==VC_TOR_OBSTACLE);
+    /* Take-over: MANUAL drives next to the person (only the ToF wall stops). */
+    assert(web(&v,VC_WEB_MODE,VC_MODE_MANUAL,0,0,0,now)==0&&v.status.state==VC_STOPPED);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,now)==0&&v.status.armed);
+    for(i=0;i<5;++i){now+=10;obstacle_frame(&v,++seq,now,200,.95F,.9F,.99F);
+        assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,now)==0);vc_step(&v,now,&o);}
+    assert(o.motor_enable&&v.status.state==VC_MANUAL);
+    /* Unanswered obstacle TOR ends like any TOR. */
+    auto_running(&v,&now,&seq);
+    now+=10;obstacle_frame(&v,++seq,now,200,.95F,.9F,.6F);vc_step(&v,now,&o);
+    assert(v.status.reason==VC_TOR_OBSTACLE);
+    {uint32_t t0=now;while(now<t0+VC_TOR_TIMEOUT_MS){now+=10;obstacle_frame(&v,++seq,now,200,.95F,.9F,.6F);vc_step(&v,now,&o);}}
+    assert(v.status.state==VC_STOPPED&&v.status.reason==VC_TOR_TIMEOUT&&!o.motor_enable);
+    /* Object below the ToF beam: the box at the image bottom also hands over. */
+    auto_running(&v,&now,&seq);
+    now+=10;obstacle_frame(&v,++seq,now,500,.95F,.9F,.96F);vc_step(&v,now,&o);
+    assert(v.status.state==VC_TOR&&v.status.reason==VC_TOR_OBSTACLE);
+    /* Not in the corridor, or not confident: no hand-over even when near. */
+    auto_running(&v,&now,&seq);
+    for(i=0;i<3;++i){now+=10;obstacle_frame(&v,++seq,now,200,.95F,.2F,.9F);vc_step(&v,now,&o);}
+    assert(o.motor_enable&&v.status.state==VC_AUTO);
+    for(i=0;i<3;++i){now+=10;obstacle_frame(&v,++seq,now,200,.5F,.9F,.9F);vc_step(&v,now,&o);}
+    assert(o.motor_enable&&v.status.state==VC_AUTO);
+    /* An AUTO start is refused while a person is already that close. */
+    boot(&v);obstacle_frame(&v,4,30,200,.95F,.9F,.6F);
+    assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0&&!v.status.armed);
+    assert(v.status.reason==VC_AUTO_REFUSED_PATH);
+    printf("PASS obstacle: alarm-only when far, TOR within %umm or at image bottom, MANUAL unaffected, TOR timeout, corridor/confidence limits, AUTO refused when near\n",(unsigned)VC_OBSTACLE_TOR_MM);
+}
+/* Wheel-balance trim: a car that drifts left keeps seeing the road to the
+ * right; AUTO learns the correction (bounded), MANUAL ▲ applies it, and
+ * MANUAL driving never changes it. */
+static void test_steering_trim(void) {
+    vc_t v;control_motor_output_t o;ai_perception_result_t a;tof_safety_result_t t;uint32_t now,seq;unsigned i;
+    auto_running(&v,&now,&seq);
+    assert(v.path.steering_trim==0.0F);
+    for(i=0;i<60;++i){now+=10;a=ai(++seq,now);a.lateral_error=.05F;   /* inside the deadband */
+        t=(tof_safety_result_t){seq,now,500,1,0};
+        assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);vc_step(&v,now,&o);}
+    assert(v.path.steering_trim>0.0F&&v.path.steering_trim<=0.10F+1e-6F);
+    assert(g_vc_steering_trim_permille>0);
+    assert(o.left_command>o.right_command);        /* corrects although inside the deadband */
+    for(i=0;i<400;++i){now+=10;a=ai(++seq,now);a.lateral_error=.9F;a.heading_error=.1F;
+        t=(tof_safety_result_t){seq,now,500,1,0};
+        assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);vc_step(&v,now,&o);}
+    assert(v.path.steering_trim<=0.10F+1e-6F);       /* bounded */
+    /* Kept across a stop; MANUAL straight ▲ now drives left > right. */
+    assert(web(&v,VC_WEB_MODE,VC_MODE_MANUAL,0,0,0,now)==0);
+    {float learned=v.path.steering_trim;
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,now)==0&&v.status.armed);
+    for(i=0;i<30;++i){now+=10;a=ai(++seq,now);a.lateral_error=-.9F;t=(tof_safety_result_t){seq,now,500,1,0};
+        assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);
+        assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,now)==0);vc_step(&v,now,&o);}
+    assert(o.motor_enable&&o.left_command>o.right_command);
+    assert(v.path.steering_trim==learned);}          /* MANUAL does not learn */
+    /* A curve (large heading) is not learned as imbalance. */
+    auto_running(&v,&now,&seq);
+    for(i=0;i<60;++i){now+=10;a=ai(++seq,now);a.lateral_error=.3F;a.heading_error=.6F;
+        t=(tof_safety_result_t){seq,now,500,1,0};
+        assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);vc_step(&v,now,&o);}
+    assert(v.path.steering_trim==0.0F);
+    puts("PASS steering trim: learned in AUTO on straight road only, bounded, kept across stop, applied to MANUAL forward");
 }
 static int held;
 static int sem_take(void *x){(void)x;if(held)return -1;held=1;return 0;}
@@ -295,7 +309,17 @@ static void test_driver(void) {
     for(i=0;i<1000;++i)motor_output_drv8833_tick_100us(&d);
     assert(d.fault&&!d.armed&&last[0]&&last[1]&&last[2]&&last[3]);
     assert(motor_output_drv8833_arm(&d)<0);
-    puts("PASS driver: inversion paths, left/right swap, cap60%/ramp, brake/coast, no-reverse deadtime, watchdog/fault latch");
+    /* Sub-slot resolution: 0.43 and 0.40 differ by less than one 5% slot but
+     * their average on-time over 10 periods still differs (86 vs 80 slots). */
+    {motor_drv8833_config_t f={.context=0,.write_pins=write_mock,.duty_limit=1.0F};
+     control_motor_output_t w={.motor_enable=1,.left_command=.43F,.right_command=.40F};
+     unsigned left_on=0,right_on=0;
+     assert(motor_output_drv8833_init(&d,&f)==0&&motor_output_drv8833_arm(&d)==0);
+     for(i=0;i<10U*MOTOR_PWM_SLOTS;++i){
+         if(i%100U==0U)assert(motor_output_drv8833_apply(&d,&w)==0);   /* keep the watchdog fed */
+         motor_output_drv8833_tick_100us(&d);left_on+=last[0];right_on+=last[2];}
+     assert(left_on>=85U&&left_on<=86U&&right_on>=79U&&right_on<=80U);}
+    puts("PASS driver: inversion paths, left/right swap, cap60%/ramp, brake/coast, no-reverse deadtime, watchdog/fault latch, sub-slot duty");
 }
 /* 2026-09-26 bench regression: M85 delivers AI frames every ~300ms, each
  * ~160ms old on arrival.  AUTO must still become ready; a real AI outage
@@ -468,4 +492,4 @@ static void test_steering_sign(void) {
     assert(o.motor_enable&&o.right_command>o.left_command);      /* left button */
     puts("PASS steering sign: AUTO right error and MANUAL left button use the vehicle convention");
 }
-int main(void){test_steering_sign();test_core();test_ai_corridor_emergency();test_ipc();test_driver();test_slow_ai_period();test_path_confidence_band();test_tor();test_results();return 0;}
+int main(void){test_steering_sign();test_core();test_ipc();test_driver();test_slow_ai_period();test_path_confidence_band();test_tor();test_obstacle_tor();test_steering_trim();test_results();return 0;}

@@ -136,6 +136,23 @@ html, body {
   .btn-sm { padding: 6px 12px; min-height: 40px; font-size: 0.9rem; }
 }
 
+/* 4b. 障害物アラーム（人物・車）：検知中のバッジと直近のログ */
+#alarm-badge {
+  display: none; padding: 6px 12px; gap: 4px; font-size: 0.95rem;
+  background: #ffd400; border-color: #000;
+}
+body[data-obstacle-alarm="true"] #alarm-badge { display: inline-flex; }
+#alarm-log {
+  position: absolute; z-index: 19; margin: 0; padding: 0; list-style: none;
+  top: calc(64px + env(safe-area-inset-top, 0px)); left: max(10px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 3px; pointer-events: none;
+  li {
+    background: rgba(0, 0, 0, 0.72); color: #fff; border-radius: 4px;
+    padding: 2px 8px; font-size: 0.78rem; font-weight: 700; font-family: monospace;
+  }
+  li:first-child { background: rgba(0, 0, 0, 0.88); color: #ffd400; }
+}
+
 /* 5. アラート通知 */
 #alert-banner {
   position:  fixed; top: calc(60px + env(safe-area-inset-top, 0px)); left: 50%;

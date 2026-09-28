@@ -31,8 +31,12 @@
       <span id="distance-val" class="val">--</span>
       <span class="unit">mm</span>
     </div>
+    <div id="alarm-badge" class="badge" role="status" aria-live="polite">⚠ <span id="alarm-kind"></span></div>
     <button popovertarget="info-modal" class="btn btn-sm">INFO</button>
   </header>
+
+  <!-- 障害物アラームのログ（新しい順、最大5件） -->
+  <ol id="alarm-log" aria-label="障害物アラームのログ"></ol>
 
   <div id="alert-banner" popover="manual">エラー通知</div>
 
@@ -57,7 +61,7 @@
   <div id="tor-overlay" class="overlay">
     <div class="card tor-card">
       <h2>TAKE OVER REQUEST</h2>
-      <p>自動運転の継続が困難です。手動操作へ引き継いでください。</p>
+      <p id="tor-message">自動運転の継続が困難です。手動操作へ引き継いでください。</p>
       <div class="timer">残り時間: <span id="tor-countdown">3.0</span> 秒</div>
       <button id="btn-takeover" class="btn btn-lg">手動操作に切り替える</button>
     </div>
@@ -93,6 +97,8 @@
       <li><strong>走行操作（ラジコン式）:</strong> 左手で前進ボタン（画面左下）、右手で ◀ / ▶（画面右）。同時に押すと曲がりながら進む。キーボードは ↑ / W で前進、← / → または A / D で左右</li>
       <li><strong>自動運転:</strong> AUTO MODE ボタンで切替要求</li>
       <li><strong>手動停止:</strong> ABORT ボタンで即時停止</li>
+      <li><strong>障害物:</strong> 人物・車を見つけると画面上部に表示し、左上にログを残します（走行は続けます）。AUTO 中に 250 mm まで近づくと運転の引き継ぎを求めます</li>
+      <li><strong>壁:</strong> 距離センサーが 100 mm 以内を測ると停止します</li>
       <li><strong>後退:</strong> 安全上、後退操作は提供していません</li>
       <li><strong>UI調整デバッグ:</strong> <code>Ctrl+Shift+D</code> / <code>\`</code> / <code>F2</code> またはステータスバッジを3回タップ</li>
     </ul>

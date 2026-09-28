@@ -1,11 +1,12 @@
-import { StopReasonText, Config } from './constants.js';
+import { StopReasonText, ObstacleKindText, Config } from './constants.js';
 
 const $ = (id) => document.getElementById(id);
 
 export class UIManager {
     constructor(callbacks = {}) {
-        this.cb         = callbacks;
-        this.alertTimer = null;
+        this.cb           = callbacks;
+        this.alertTimer   = null;
+        this.lastAlarmSeq = null;
         this.el = {
             status:     $('status-text'),
             dist:       $('distance-val'),
@@ -13,7 +14,10 @@ export class UIManager {
             btnStop:    $('btn-stop'),
             stopReason: $('stop-reason-text'),
             alert:      $('alert-banner'),
-            tor:        $('tor-countdown')
+            tor:        $('tor-countdown'),
+            alarmKind:  $('alarm-kind'),
+            torMessage: $('tor-message'),
+            alarmLog:   $('alarm-log')
         };
         this.el.btnMode?.addEventListener('click', () => this.cb.onDriveModeClick?.());
         this.el.btnStop?.addEventListener('click', () => this.cb.onStopClick?.());
@@ -33,10 +37,40 @@ export class UIManager {
         if (this.el.btnMode) this.el.btnMode.textContent = state.startsWith('AUTO') ? 'AUTO MODE' : 'MANUAL MODE';
         if (this.el.btnStop) this.el.btnStop.textContent = isAbort ? 'RESET' : 'ABORT';
         if (isTor && mcu?.tor_remaining_ms != null && this.el.tor) this.el.tor.textContent = (mcu.tor_remaining_ms / 1000).toFixed(1);
+        if (isTor && this.el.torMessage) {
+            this.el.torMessage.textContent = stopReason === 'AI_OBSTACLE' ?
+                '前方に人物・車が近づいています。手動操作へ引き継いでください。' :
+                '自動運転の継続が困難です。手動操作へ引き継いでください。';
+        }
         if (this.el.stopReason) {
             this.el.stopReason.textContent = showStopReason ?
                 (StopReasonText[stopReason] || stopReason) : 'NONE';
         }
+        this.renderAlarm(state === 'DISCONNECTED' ? null : mcu);
+    }
+
+    /* Person/car alarm from the M85 camera: a badge while it lasts and one
+     * log line per new alarm (alarm_seq).  Not a stop by itself. */
+    renderAlarm(mcu) {
+        const active = !!mcu?.obstacle_alarm;
+        const kind = ObstacleKindText[mcu?.obstacle_kind] || '障害物';
+        document.body.dataset.obstacleAlarm = active ? 'true' : 'false';
+        if (this.el.alarmKind) this.el.alarmKind.textContent = `${kind}を検知`;
+        const seq = mcu?.alarm_seq;
+        if (!Number.isInteger(seq) || seq === this.lastAlarmSeq) return;
+        const first = this.lastAlarmSeq === null;
+        this.lastAlarmSeq = seq;
+        if (first && !active) return;          /* page opened: older alarms are not replayed */
+        this.addAlarmLog(`${new Date().toLocaleTimeString('ja-JP', { hour12: false })} ${kind}を検知`);
+    }
+
+    addAlarmLog(text) {
+        const log = this.el.alarmLog;
+        if (!log) return;
+        const item = document.createElement('li');
+        item.textContent = text;
+        log.prepend(item);
+        while (log.children.length > Config.ALARM_LOG_MAX) log.lastElementChild.remove();
     }
 
     showError(msg) {

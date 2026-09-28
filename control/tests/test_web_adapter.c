@@ -191,6 +191,24 @@ static void test_status_to_response(void)
     web_adapter_status_to_response(&status, &response);
     assert(response.stop_reason == STOP_REASON_AI_OBSTACLE);
     assert(response.request_reject_reason == REQUEST_REJECT_NONE);
+    /* 2026-09-28: a close person/car in AUTO is a TOR that names the cause. */
+    status.state = VC_TOR; status.mode = VC_MODE_AUTO; status.reason = VC_TOR_OBSTACLE;
+    web_adapter_status_to_response(&status, &response);
+    assert(response.tor_active && response.mode == VEHICLE_AUTO);
+    assert(response.stop_reason == STOP_REASON_AI_OBSTACLE);
+    assert(!response.obstacle_alarm && response.obstacle_kind == OBSTACLE_KIND_NONE);
+
+    /* Person/car alarm word from the M85 camera task. */
+    web_adapter_obstacle_alarm((3U << AUTONOMY_ALARM_SEQ_SHIFT) | AUTONOMY_ALARM_ACTIVE |
+                               AUTONOMY_ALARM_PERSON, &response);
+    assert(response.obstacle_alarm && response.obstacle_kind == OBSTACLE_KIND_PERSON &&
+           response.alarm_seq == 3U);
+    web_adapter_obstacle_alarm((4U << AUTONOMY_ALARM_SEQ_SHIFT) | AUTONOMY_ALARM_ACTIVE |
+                               AUTONOMY_ALARM_PERSON | AUTONOMY_ALARM_CAR, &response);
+    assert(response.obstacle_kind == OBSTACLE_KIND_PERSON_AND_CAR && response.alarm_seq == 4U);
+    web_adapter_obstacle_alarm(4U << AUTONOMY_ALARM_SEQ_SHIFT, &response);
+    assert(!response.obstacle_alarm && response.obstacle_kind == OBSTACLE_KIND_NONE &&
+           response.alarm_seq == 4U);
 }
 
 static void test_gateway(void)

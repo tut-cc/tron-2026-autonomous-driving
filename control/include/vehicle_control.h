@@ -30,8 +30,11 @@ typedef enum {
     /* Distinct stop causes shown to the operator (2026-09-27 field fix). */
     VC_TOF_NEAR,          /* valid distance <= VC_TOF_STOP_MM: EMERGENCY          */
     VC_ESTOP,             /* explicit Web ESTOP: latched until a board reset       */
-    VC_AI_OBSTACLE,       /* AI person/car in the driving corridor: EMERGENCY      */
+    VC_AI_OBSTACLE,       /* no longer produced (2026-09-28: see VC_TOR_OBSTACLE)  */
     VC_TOF_PRESTOP,       /* valid distance <= VC_TOF_PRESTOP_MM: ordinary STOP    */
+    /* AUTO: person/car in the corridor within VC_OBSTACLE_TOR_MM.  Same as
+     * VC_TOR_REQUEST (state VC_TOR, output 0), but tells the driver why. */
+    VC_TOR_OBSTACLE,
     VC_REASON_COUNT
 } vc_reason_t;
 static inline int vc_reason_is_auto_refusal(uint32_t reason)
@@ -88,6 +91,21 @@ static inline int vc_permille_ok(int32_t value)
 #define VC_LINK_FRESH_MS      300U  /* M85 heartbeat must be newer than this   */
 #define VC_AI_FRESH_MS        AI_FRAME_MAX_AGE_MS /* AI frame age limit (see ai_control_signals.h) */
 #define VC_TOR_TIMEOUT_MS    3000U  /* TOR unanswered this long -> safe stop  */
+/* 2026-09-28 demo layout: a person/car seen by the camera only raises an
+ * alarm (M85 -> Web) and slows AUTO down; within this ToF distance AUTO hands
+ * over to the driver (TOR).  Must stay beyond the ToF stop distance so the
+ * hand-over happens before the wall stop. */
+#define VC_OBSTACLE_TOR_MM    250U
+#if VC_OBSTACLE_TOR_MM <= VC_TOF_CLEAR_MM
+#error "VC_OBSTACLE_TOR_MM must be beyond the ToF stop/clear distance"
+#endif
+/* Wheel-balance trim the AUTO follower starts from (learned value shown in
+ * g_vc_steering_trim_permille; positive = more left-wheel command).  0 lets
+ * the car learn it on every power-up; a value read from the debugger may be
+ * written here to start from it. */
+#ifndef VC_STEERING_TRIM_INITIAL
+#define VC_STEERING_TRIM_INITIAL 0.0F
+#endif
 /* MANUAL fail-safe: stop when no Web command arrived for this long.  300ms is
  * the design value (the Web UI sends every 100ms).  If phone->board HTTP gaps
  * exceed it the vehicle stops with COMM_TIMEOUT (safe side); a bench-only
@@ -124,6 +142,8 @@ typedef struct {
 /* Diagnostics for the debugger (see vc_arm_result_t). */
 extern volatile uint32_t g_vc_start_result;
 extern volatile uint32_t g_vc_clear_result;
+/* Learned wheel-balance trim x1000 (see VC_STEERING_TRIM_INITIAL). */
+extern volatile int32_t g_vc_steering_trim_permille;
 /* Latest accepted inputs.  `have_*` is 0 until the first accepted sample;
  * the M85 link has no payload, only the time of the last heartbeat.  Local
  * to the M33 (not part of the IPC ABI). */

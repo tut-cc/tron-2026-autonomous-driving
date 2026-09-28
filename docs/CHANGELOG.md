@@ -2,6 +2,22 @@
 
 新しい記録ほど上の「現状」に追記しています。本文中の古いファイル名（`STATUS_20260927_JA.md` など）は当時の名前です（4m 参照）。
 
+## 2026-09-28 デモ構成変更・蛇行・起動時の微動（ソース反映済み・未書き込み）
+段ボール壁をやめ、白いコース上で「壁＝ToFで停止」「人・車＝アラーム、近づいたらTOR」の構成にした。
+
+| 内容 | 主なファイル |
+|---|---|
+| 人・車（信頼度0.65以上・走行路との重なり0.40以上）は停止ではなくアラーム。M85がWeb応答に `obstacle_alarm` / `obstacle_kind` / `alarm_seq` を載せ、UIはバッジと時刻付きログ（最大5件）を表示 | `CPU0/src/autonomy_controller.c`, `web_control_adapter.c`, `m85_gateway_task.c`, `M85Web/Application/protocol/*`, `mini-4wd-webapp/js/ui.js`, `index.html`, `style.css` |
+| AUTO中、その人・車が ToF 250 mm 以内（`VC_OBSTACLE_TOR_MM`）または画像の最下部（0.95、ToFの下の低い物用）に来たら TOR（理由 `VC_TOR_OBSTACLE`、Webは `AI_OBSTACLE`）。以前は画像下55%で即EMERGENCYだった。MANUALでは止めない | `control/src/control_motor.c`, `vehicle_control.c`, `control/include/*` |
+| M85の「AI_OBJECT_AHEAD で画像最下部の仮想障害物を足す」処理を削除（実際の検出位置で判定するため） | `CPU0/src/autonomy_controller.c` |
+| 判定のしきい値を両コア共通に（`AI_OBSTACLE_CONFIDENCE_MIN_PER_MILLE` 650 / `AI_OBSTACLE_OVERLAP_MIN_PER_MILLE` 400） | `control/include/ai_control_signals.h` |
+| 蛇行対策1：左右モーター差の自動補正。AUTOでまっすぐな区間を走る間、生のずれ（不感帯なし）を1フレームごとに15%ずつ積算してトリムを学習（上限±0.10）。電源を切るまで保持し、MANUALの前進にも適用。値はデバッガで `g_vc_steering_trim_permille` | `control_motor.c/.h`, `vehicle_control.c/.h` |
+| 蛇行対策2：PWMを 1/256 スロット精度に（周期ごとに端数を持ち越す）。従来は5%刻みで、小さな操舵補正が切り捨てられていた | `control/src/motor_output_drv8833.c/.h` |
+| 起動時の微動：CPU0 が起動直後（`R_BSP_WarmStart` POST_C）にモーター4ピンを LOW 出力にする。CPU1 が起動するまでピンが浮き、PMOD1-8（P402、Pmod の RESET 線）などが High 側に振れていたと推定 | `CPU0/src/hal_entry.c`, `control/include/motor_pins_ra8p1.h`, `control/ports/control_hw_ra8p1.c` |
+
+- CPU0・CPU1とも再ビルド・書き込みが必要（IPCの形式は不変）。
+- 実機未確認：250 mm でのTOR、トリム学習の収束、起動時の微動が消えるか。
+
 ## 2026-09-28 Webアプリ整理（ソース反映済み・未書き込み）
 | 内容 | 主なファイル |
 |---|---|
