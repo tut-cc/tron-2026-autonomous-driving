@@ -7,6 +7,7 @@ export class UIManager {
         this.cb           = callbacks;
         this.alertTimer   = null;
         this.lastAlarmSeq = null;
+        this.manualAdvisoryShown = false;
         this.el = {
             status:     $('status-text'),
             dist:       $('distance-val'),
@@ -44,6 +45,7 @@ export class UIManager {
                 (StopReasonText[stopReason] || stopReason) : 'NONE';
         }
         this.renderAlarm(state === 'DISCONNECTED' ? null : mcu);
+        this.renderManualAdvisory(state, mcu, showStopReason);
     }
 
     /* Person/car alarm from the M85 camera: a badge while it lasts and one
@@ -59,6 +61,25 @@ export class UIManager {
         this.lastAlarmSeq = seq;
         if (first && !active) return;          /* page opened: older alarms are not replayed */
         this.addAlarmLog(`${new Date().toLocaleTimeString('ja-JP', { hour12: false })} ${kind}を検知`);
+    }
+
+    /* A camera-detected person/car plus a valid close ToF reading is an
+     * advisory only while AUTO is active. Log once per encounter. */
+    renderManualAdvisory(state, mcu, showStopReason) {
+        const distance = mcu?.front_distance_mm;
+        const closeObstacle = !!mcu?.obstacle_alarm && Number.isFinite(distance) &&
+            distance >= 0 && distance <= 300;
+        const show = closeObstacle && state === 'AUTO' && !showStopReason;
+        document.body.dataset.manualAdvisory = show ? 'true' : 'false';
+
+        if (!closeObstacle) {
+            this.manualAdvisoryShown = false;
+            return;
+        }
+        if (show && !this.manualAdvisoryShown) {
+            this.addAlarmLog(`${new Date().toLocaleTimeString('ja-JP', { hour12: false })} 手動操作への切り替えをお勧めします`);
+            this.manualAdvisoryShown = true;
+        }
     }
 
     addAlarmLog(text) {

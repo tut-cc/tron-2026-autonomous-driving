@@ -123,6 +123,15 @@ html, body {
   background: #ffd400; border-color: #000;
 }
 body[data-obstacle-alarm="true"] #alarm-badge { display: inline-flex; }
+#manual-advisory {
+  display: none; position: fixed; top: calc(108px + env(safe-area-inset-top, 0px));
+  left: 50%; translate: -50% 0; max-width: min(92%, 520px); z-index: 75;
+  padding: 10px 16px; border: 2px solid #8a2600; border-radius: 8px;
+  background: #ffb347; color: #111; font-size: 1rem; font-weight: 800;
+  text-align: center; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+body[data-manual-advisory="true"] #manual-advisory { display: block; }
 #alarm-log {
   position: absolute; z-index: 19; margin: 0; padding: 0; list-style: none;
   top: calc(64px + env(safe-area-inset-top, 0px)); left: max(10px, env(safe-area-inset-left, 0px));
