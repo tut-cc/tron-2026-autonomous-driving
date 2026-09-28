@@ -255,12 +255,12 @@ static void test_obstacle_alarm_only(void) {
 static void test_steering_trim(void) {
     vc_t v;control_motor_output_t o;ai_perception_result_t a;tof_safety_result_t t;uint32_t now,seq;unsigned i;
     auto_running(&v,&now,&seq);
-    assert(v.path.steering_trim==0.0F);
+    assert(v.path.steering_trim==VC_STEERING_TRIM_INITIAL);
     for(i=0;i<60;++i){now+=10;a=ai(++seq,now);a.lateral_error=.05F;   /* inside the deadband */
         t=(tof_safety_result_t){seq,now,500,1,0};
         assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);vc_step(&v,now,&o);}
-    assert(v.path.steering_trim>0.0F&&v.path.steering_trim<=0.10F+1e-6F);
-    assert(g_vc_steering_trim_permille>0);
+    assert(v.path.steering_trim>VC_STEERING_TRIM_INITIAL&&v.path.steering_trim<=0.10F+1e-6F);
+    assert(g_vc_steering_trim_permille>(int32_t)(VC_PERMILLE_MAX * VC_STEERING_TRIM_INITIAL));
     assert(o.left_command>o.right_command);        /* corrects although inside the deadband */
     for(i=0;i<400;++i){now+=10;a=ai(++seq,now);a.lateral_error=.9F;a.heading_error=.1F;
         t=(tof_safety_result_t){seq,now,500,1,0};
@@ -280,7 +280,7 @@ static void test_steering_trim(void) {
     for(i=0;i<60;++i){now+=10;a=ai(++seq,now);a.lateral_error=.3F;a.heading_error=.6F;
         t=(tof_safety_result_t){seq,now,500,1,0};
         assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);vc_step(&v,now,&o);}
-    assert(v.path.steering_trim==0.0F);
+    assert(v.path.steering_trim==VC_STEERING_TRIM_INITIAL);
     puts("PASS steering trim: learned in AUTO on straight road only, bounded, kept across stop, applied to MANUAL forward");
 }
 static int held;

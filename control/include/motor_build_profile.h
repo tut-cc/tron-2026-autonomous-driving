@@ -50,6 +50,15 @@
 #endif
 #define MOTOR_DUTY_LIMIT ((float)MOTOR_DUTY_CAP_PERCENT / 100.0F)
 
+/* Wheel-balance trim initial offset (-0.10 to +0.10).
+ * Positive = stronger left-wheel command (corrects a vehicle drifting left).
+ * Negative = stronger right-wheel command (corrects a vehicle drifting right).
+ * 0.0F lets the car learn it on every power-up; set a non-zero value to apply
+ * an initial individual motor correction immediately from boot. */
+#ifndef MOTOR_STEERING_TRIM_INITIAL
+#define MOTOR_STEERING_TRIM_INITIAL -0.03F
+#endif
+
 #define MOTOR_BUILD_PROFILE_NAME \
     (MOTOR_PHYSICAL_OUTPUT_ENABLE ? "vehicle-output" : "dry-run")
 

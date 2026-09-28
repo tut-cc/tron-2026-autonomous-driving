@@ -1,6 +1,7 @@
 #ifndef VEHICLE_CONTROL_H
 #define VEHICLE_CONTROL_H
 #include "control_motor.h"
+#include "motor_build_profile.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -91,10 +92,14 @@ static inline int vc_permille_ok(int32_t value)
 #define VC_TOR_TIMEOUT_MS    3000U  /* TOR unanswered this long -> safe stop  */
 /* Wheel-balance trim the AUTO follower starts from (learned value shown in
  * g_vc_steering_trim_permille; positive = more left-wheel command).  0 lets
- * the car learn it on every power-up; a value read from the debugger may be
- * written here to start from it. */
+ * the car learn it on every power-up; a value read from the debugger or configured
+ * via MOTOR_STEERING_TRIM_INITIAL in motor_build_profile.h is used as the initial bias. */
 #ifndef VC_STEERING_TRIM_INITIAL
+#ifdef MOTOR_STEERING_TRIM_INITIAL
+#define VC_STEERING_TRIM_INITIAL MOTOR_STEERING_TRIM_INITIAL
+#else
 #define VC_STEERING_TRIM_INITIAL 0.0F
+#endif
 #endif
 /* MANUAL fail-safe: stop when no Web command arrived for this long.  300ms is
  * the design value (the Web UI sends every 100ms).  If phone->board HTTP gaps
