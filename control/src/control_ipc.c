@@ -138,7 +138,7 @@ int ipc_unpack_ai(const ipc_packet_t *p,ai_perception_result_t *a) {
 
 /* ---- Web command ---------------------------------------------------------- */
 int ipc_pack_web(ipc_packet_t *p,uint32_t session,const vc_web_t *w) {
-    if(!p||!w||w->action>VC_WEB_ESTOP||w->mode>VC_MODE_MANUAL||w->deadman>1||
+    if(!p||!w||w->action>VC_WEB_RESET||w->mode>VC_MODE_MANUAL||w->deadman>1||
        !vc_permille_ok(w->linear)||!vc_permille_ok(w->steering))return IPC_ERROR;
     header(p,vc_web_action_is_stop(w->action)?IPC_STOP:IPC_WEB,session,w->seq,w->timestamp_ms,IPC_WEB_WORDS);
     p->data[IPC_WEB_ACTION]=w->action;p->data[IPC_WEB_MODE]=w->mode;p->data[IPC_WEB_DEADMAN]=w->deadman;

@@ -46,8 +46,12 @@ int web_adapter_request_to_command(const control_request_t *request, vc_web_t *c
         command->action = VC_WEB_ESTOP;
         return 0;
     }
-    if (request->manual_abort_request || request->reset_abort_request) {
+    if (request->manual_abort_request) {
         command->action = VC_WEB_STOP;
+        return 0;
+    }
+    if (request->reset_abort_request) {
+        command->action = VC_WEB_RESET;
         return 0;
     }
     if (request->mode_request != MODE_REQUEST_NONE) {
@@ -84,8 +88,9 @@ static vehicle_state_t response_mode(const vc_status_t *status)
     case VC_MANUAL:
         return VEHICLE_MANUAL;
     default:
-        /* TOR unanswered: AUTO was aborted (UI shows the TOR_TIMEOUT reason
-         * until the operator resets with STOP). */
+        /* Stopped: manual abort (STOP button) and TOR timeout are shown as
+         * abort states until the operator explicitly resets with the RESET button. */
+        if (status->reason == VC_OPERATOR) return VEHICLE_MANUAL_ABORT;
         if (status->reason == VC_TOR_TIMEOUT) return VEHICLE_AUTO_ABORT;
         /* Stopped: report the M33-selected mode.  The current RC firmware
          * boots in MANUAL; preserve the field rather than assuming it. */

@@ -91,7 +91,25 @@ static void test_core(void) {
     assert(v.status.state==VC_EMERGENCY&&v.status.reason==VC_ESTOP&&!o.motor_enable);
     assert(vc_clear_emergency(&v,280)==VC_ARM_EMERGENCY);
     assert(web(&v,VC_WEB_STOP,VC_MODE_MANUAL,0,0,0,280)==0&&v.status.reason==VC_ESTOP);
-    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,280)==0&&!v.status.armed);
+    assert(web(&v,VC_WEB_RESET,VC_MODE_MANUAL,0,0,0,285)==0&&v.status.reason==VC_ESTOP);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,290)==0&&!v.status.armed);
+    /* Web STOP enters operator abort; VC_WEB_RESET clears it back to normal stopped MANUAL. */
+    boot(&v);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,30)==0&&v.status.armed);
+    assert(web(&v,VC_WEB_STOP,VC_MODE_MANUAL,0,0,0,40)==0&&!v.status.armed);
+    assert(v.status.state==VC_STOPPED&&v.status.reason==VC_OPERATOR);
+    assert(web(&v,VC_WEB_RESET,VC_MODE_MANUAL,0,0,0,50)==0);
+    assert(v.status.state==VC_STOPPED&&v.status.reason==VC_OK&&!v.status.armed);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,60)==0&&v.status.armed);
+    /* Internal fault upgrades an existing sensor emergency and stays latched. */
+    boot(&v);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,30)==0&&v.status.armed);
+    t=(tof_safety_result_t){5,40,VC_TOF_STOP_MM,1,0};vc_tof(&v,&t,40);vc_link(&v,40);vc_step(&v,40,&o);
+    assert(v.status.state==VC_EMERGENCY&&v.status.reason==VC_TOF_NEAR);
+    vc_stop(&v,VC_INTERNAL,1);
+    assert(v.status.state==VC_EMERGENCY&&v.status.reason==VC_INTERNAL);
+    t=(tof_safety_result_t){6,50,VC_TOF_CLEAR_MM,1,0};vc_tof(&v,&t,50);vc_link(&v,50);vc_step(&v,50,&o);
+    assert(v.status.state==VC_EMERGENCY&&v.status.reason==VC_INTERNAL);
     /* AUTO button starts autonomous driving and ignores the phone afterwards. */
     boot(&v);assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0);
     assert(v.status.armed&&v.status.mode==VC_MODE_AUTO&&v.status.state==VC_AUTO);
