@@ -12,6 +12,7 @@ export class UIManager {
             status:     $('status-text'),
             dist:       $('distance-val'),
             btnMode:    $('btn-mode'),
+            btnAbort:   $('btn-abort-action'),
             stopReason: $('stop-reason-text'),
             alert:      $('alert-banner'),
             tor:        $('tor-countdown'),
@@ -20,6 +21,7 @@ export class UIManager {
             alarmLog:   $('alarm-log')
         };
         this.el.btnMode?.addEventListener('click', () => this.cb.onDriveModeClick?.());
+        this.el.btnAbort?.addEventListener('click', () => this.cb.onAbortActionClick?.());
         $('btn-takeover')?.addEventListener('click', () => this.cb.onTorTakeoverClick?.());
         $('camera')?.addEventListener('dragstart', (e) => e.preventDefault());
         try { navigator.wakeLock?.request('screen'); } catch (_) {}
@@ -34,6 +36,12 @@ export class UIManager {
         if (this.el.status)  this.el.status.textContent  = state === 'DISCONNECTED' ? '未接続' : '接続中';
         if (this.el.dist)    this.el.dist.textContent    = (mcu?.front_distance_mm ?? -1) >= 0 ? mcu.front_distance_mm : '--';
         if (this.el.btnMode) this.el.btnMode.textContent = state.startsWith('AUTO') ? 'AUTO MODE' : 'MANUAL MODE';
+        if (this.el.btnAbort) {
+            const abort = state === 'AUTO_ABORT' || state === 'MANUAL_ABORT';
+            this.el.btnAbort.textContent = abort ? 'RESET' : 'STOP';
+            this.el.btnAbort.setAttribute('aria-label', abort ? '停止状態をリセット' : '停止');
+            this.el.btnAbort.disabled = state === 'DISCONNECTED' || state.includes('PENDING') || state === 'AUTO_TOR';
+        }
         if (isTor && mcu?.tor_remaining_ms != null && this.el.tor) this.el.tor.textContent = (mcu.tor_remaining_ms / 1000).toFixed(1);
         if (isTor && this.el.torMessage) {
             this.el.torMessage.textContent = stopReason === 'AI_OBSTACLE' ?

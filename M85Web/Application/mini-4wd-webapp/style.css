@@ -125,10 +125,10 @@ html, body {
 body[data-obstacle-alarm="true"] #alarm-badge { display: inline-flex; }
 #manual-advisory {
   display: none; position: fixed; top: calc(108px + env(safe-area-inset-top, 0px));
-  left: 50%; translate: -50% 0; max-width: min(92%, 520px); z-index: 75;
-  padding: 10px 16px; border: 2px solid #8a2600; border-radius: 8px;
-  background: #ffb347; color: #111; font-size: 1rem; font-weight: 800;
-  text-align: center; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  left: 50%; translate: -50% 0; width: min(94%, 560px); z-index: 95;
+  padding: 14px 18px; border: 3px solid #7a0000; border-radius: 10px;
+  background: #c90016; color: #fff; font-size: clamp(1.1rem, 3.6vw, 1.45rem); font-weight: 900;
+  text-align: center; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.65);
   pointer-events: none;
 }
 body[data-manual-advisory="true"] #manual-advisory { display: block; }
@@ -177,6 +177,8 @@ body[data-manual-advisory="true"] #manual-advisory { display: block; }
     .action-btn {
       width: clamp(112px, 18vw, 170px); min-height: 48px; padding: 4px 8px; font-size: clamp(0.9rem, 2.3vw, 1.1rem); font-weight: 800; border-width: 2px;
     }
+    .abort-btn { background: #fff; border-color: #9c0011; color: #9c0011; }
+    .abort-btn:active { background: #9c0011; color: #fff; }
   }
 }
 
@@ -243,7 +245,7 @@ body[data-manual-advisory="true"] #manual-advisory { display: block; }
 body[data-state="DISCONNECTED"] {
   #disconnected-overlay     { display: flex; }
   #status-badge .status-dot { background: transparent; border: 1.5px solid #000; }
-  #btn-mode, .pad-btn { opacity: 0.35; pointer-events: none; }
+  #btn-mode, #btn-abort-action, .pad-btn { opacity: 0.35; pointer-events: none; }
 }
 
 body[data-state="AUTO_TOR"], body[data-state="TOR_MANUAL_PENDING"] {
@@ -257,6 +259,10 @@ body[data-state^="AUTO"] {
     background: #000; color: #fff;
     &:active { background: #fff; color: #000; }
   }
+}
+
+body[data-state="AUTO_ABORT"], body[data-state="MANUAL_ABORT"] {
+  #btn-abort-action { background: #c90016; border-color: #7a0000; color: #fff; }
 }
 
 body[data-state$="_PENDING"] #btn-mode {

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf8'?>
 <projectDescription>
   <name>ra8p1_vision_CPU0</name>
-  <comment>Source-built RA8P1 dual-core integration; see README_JA.md</comment>
+  <comment>Source-built RA8P1 dual-core integration; see docs/GITHUB_SETUP.md</comment>
   <projects />
   <buildSpec>
     <buildCommand>
@@ -13,7 +13,7 @@
         </dictionary>
         <dictionary>
           <key>org.eclipse.cdt.make.core.build.arguments</key>
-          <value>../tools/build.py --core CPU0 --profile vehicle-output --allow-physical-output</value>
+          <value>../tools/build.py --core all --profile vehicle-output --allow-physical-output</value>
         </dictionary>
         <dictionary>
           <key>org.eclipse.cdt.make.core.useDefaultBuildCmd</key>

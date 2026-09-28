@@ -175,12 +175,14 @@ assert 'python' in solution_project
 assert '../tools/build.py --core all --profile vehicle-output --allow-physical-output' in solution_project
 for core in ('CPU0','CPU1'):
     project=(R/core/'.project').read_text()
-    assert f'../tools/build.py --core {core} --profile vehicle-output --allow-physical-output' in project
+    build_core='all' if core=='CPU0' else core
+    assert f'../tools/build.py --core {build_core} --profile vehicle-output --allow-physical-output' in project
 active_launches=list(R.rglob('*.launch'))
 assert [p.relative_to(R).as_posix() for p in active_launches]==['CPU0/ra8p1_vision_BothCore_Download.launch']
 both=active_launches[0].read_text(encoding='utf-8')
 assert '${workspace_loc:/ra8p1_vision_CPU0}/Build/CPU0.elf' in both
 assert '${workspace_loc:/ra8p1_vision_CPU1}/Build/CPU1.elf' in both
+assert 'org.eclipse.cdt.launch.ATTR_BUILD_BEFORE_LAUNCH_ATTR" value="1"' in both
 assert 'FLASH_START = 0x020f0000' in map1
 assert 'R7KA8P1KF_CPU0' in both
 assert 'com.renesas.cdt.core.runCommands\" value=\"\"' in both
@@ -203,7 +205,7 @@ for path in R.rglob('*'):
 
 # Verify the CDT metadata that the e² studio audit imported and built.
 for project_name, core, config_id in (
-    ('CPU0','CPU0','vehicle.cpu0.source'),
+    ('CPU0','all','vehicle.cpu0.source'),
     ('CPU1','CPU1','vehicle.cpu1.source'),
     ('Solution','all','vehicle.solution.source'),
 ):

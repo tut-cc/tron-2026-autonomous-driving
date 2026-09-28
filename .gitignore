@@ -1,8 +1,8 @@
 # Build outputs: regenerate with tools/make_evidence.py (or tools/build.py).
+# The two release ELF files are committed for first-run e2 studio debugging.
 # Build/*.lld and Build/bsp_linker_info.h are linker inputs and ARE tracked.
 /CPU0/Build/obj/
 /CPU1/Build/obj/
-/CPU*/Build/*.elf
 /CPU*/Build/*.srec
 /CPU*/Build/*.map
 /CPU*/Build/link.rsp

@@ -66,3 +66,25 @@ test('STOP/TOR display priority is preserved and a cleared threshold re-arms the
     ui.renderManualAdvisory('AUTO', closeObstacle, false);
     assert.equal(ui.logs.length, 2);
 });
+
+test('abort action is labeled RESET after a TOR timeout and STOP in normal MANUAL', () => {
+    const button = {
+        textContent: '', disabled: false, attributes: {},
+        addEventListener() {},
+        setAttribute(name, value) { this.attributes[name] = value; }
+    };
+    globalThis.document = {
+        body: { dataset: {} },
+        getElementById(id) { return id === 'btn-abort-action' ? button : null; }
+    };
+    const ui = new UIManager();
+
+    ui.renderState('AUTO_ABORT', { armed: false, stop_reason: 'TOR_TIMEOUT' });
+    assert.equal(button.textContent, 'RESET');
+    assert.equal(button.attributes['aria-label'], '停止状態をリセット');
+    assert.equal(button.disabled, false);
+
+    ui.renderState('MANUAL', { armed: false, stop_reason: 'NONE' });
+    assert.equal(button.textContent, 'STOP');
+    assert.equal(button.attributes['aria-label'], '停止');
+});

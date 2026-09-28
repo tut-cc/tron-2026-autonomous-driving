@@ -2,7 +2,7 @@
 
 **TRON Programming Contest 2026 応募作品**
 
-GitHubから受け取ってe² studioで使う方は、最初に[取得・インポート・ビルド・書き込み手順](docs/GITHUB_SETUP.md)を読んでください。GitHubにはELFを同梱していないため、初回ビルドが必要です。
+GitHubから受け取ってe² studioで使う方は、最初に[取得・インポート・ビルド・書き込み手順](docs/GITHUB_SETUP.md)を読んでください。検証済みの両コアELFを同梱し、デバッグ起動前にはソースから両コアを自動ビルドします。
 
 μT-Kernel 3.0 と Renesas EK-RA8P1 を用いて、AIによる自動走行・人間への操作の引き継ぎ・安全停止を体験できる自動運転教育教材です。
 
