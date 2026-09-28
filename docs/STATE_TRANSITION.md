@@ -2,6 +2,8 @@
 
 本ドキュメントは、車載マイコン（CPU1: Cortex-M33 / CPU0: Cortex-M85）および Web UI（ブラウザ側 WebApp）のソースコードを解析し、状態遷移モデルを Mermaid 図として整理したものです。また、コード解析により判明したバグおよび仕様との不整合について詳述します。
 
+※ CPU0 と CPU1 間の詳細なリソース競合・排他制御（ハードウェアセマフォ、I2C RPC、共有メモリ調停）およびブートハンドシェイクの解析については、[CPU_CONCURRENCY_AND_STATE_TRANSITION.md](file:///C:/TRON/demo/docs/CPU_CONCURRENCY_AND_STATE_TRANSITION.md) を参照してください。
+
 ---
 
 ## 1. システム全体アーキテクチャと状態管理の分担
@@ -258,7 +260,7 @@ sequenceDiagram
         W->>U: 停止理由「引継ぎ時間切れ」表示、ボタンが「RESET」に変化
         U->>W: 「RESET」ボタン押下
         W->>M85: POST /api/control {reset_abort_request: true}
-        M85->>M33: IPC_STOP (action=STOP) -> reason が VC_OPERATOR に更新
+        M85->>M33: IPC_WEB (action=VC_WEB_RESET) -> reason が VC_OK にクリア
         M85-->>W: HTTP 200 {mode: "MANUAL", armed: false}
         W->>W: state = MANUAL に復帰
     end
@@ -266,69 +268,66 @@ sequenceDiagram
 
 ---
 
-## 5. コード解析により発見されたバグ・設計不整合一覧
+### シーケンス 4: 手動 ABORT（中断）と RESET（手動復帰）
 
-コード（C言語およびJavaScript）の網羅的解析により、**5件の不具合・潜在的リスク**を発見しました。
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as ユーザー
+    participant W as Web UI
+    participant M85 as CPU0 (M85)
+    participant M33 as CPU1 (M33)
 
-### 【バグ 1: 重大】手動 ABORT ボタン押下時に `MANUAL_ABORT` 画面にならず即座に `MANUAL`（走行可能）に復帰してしまう
-- **該当箇所**: `CPU0/src/web_control_adapter.c` (`response_mode` 関数 74〜94行目)
-- **問題の内容**:
-  `README.md`（デモシナリオ 7:「`ABORT` で即時停止し、`RESET` を押すまで再発進しないことを確認する」）、`docs/protocol.md`（「`manual_abort_request: true`: 最優先で全出力を遮断し `MANUAL_ABORT`」）、`docs/ui-spec.md`（全体状態遷移図）では、画面の ABORT ボタンを押すと手動中断状態（`MANUAL_ABORT`）に遷移し、入力がロックされ、停止ボタンが「RESET」に変わり、RESETを押すまで再発進できない仕様とされています。
-  しかし、`web_control_adapter.c` の実装は以下のようになっています：
-  ```c
-  static vehicle_state_t response_mode(const vc_status_t *status)
-  {
-      switch (status->state) {
-      case VC_EMERGENCY:
-          return VEHICLE_MANUAL_ABORT;
-      case VC_AUTO:
-      case VC_TOR:
-          return VEHICLE_AUTO;
-      case VC_MANUAL:
-          return VEHICLE_MANUAL;
-      default:
-          /* status->state == VC_STOPPED の場合 */
-          if (status->reason == VC_TOR_TIMEOUT) return VEHICLE_AUTO_ABORT;
-          return (status->mode == VC_MODE_AUTO) ? VEHICLE_AUTO : VEHICLE_MANUAL;
-      }
-  }
-  ```
-  手動 ABORT を押したとき、M33 は `vc_stop(v, VC_OPERATOR, 0)` により `state = VC_STOPPED`（`reason = VC_OPERATOR`）となります。
-  上記 `response_mode` では、`VC_STOPPED` かつ `reason == VC_OPERATOR` の場合、**`VEHICLE_MANUAL`** が返されます。
-  その結果、Web UI（`state-machine.js`）は直ちに `pending` を解除して **`UIState.MANUAL`（走行可能状態）に復帰** してしまいます。
-- **影響**:
-  - 画面の停止ボタンが「RESET」にならず「ABORT」のまま残る。
-  - 操作パッドのロックが即座に解除され、RESETボタンを押さなくてもすぐに再発進できてしまう。
-  - **審査員デモ手順（README.md デモシナリオ7）および安全仕様書と明確に矛盾している。**
-- **背景と根本原因**:
-  M33 側には元々「RESET」専用コマンドがなく、Web側の `reset_abort_request` も `manual_abort_request` と同じ `VC_WEB_STOP`（`VC_OPERATOR`）にマッピングされています。そのため、もし `reason == VC_OPERATOR` で `MANUAL_ABORT` を返すと、今度は RESET を押しても M33 の reason が解除されず `MANUAL_ABORT` から永久に抜け出せなくなるため、暫定修正として `VEHICLE_MANUAL` を返してしまった痕跡が見られます。M33 にリセット処理（reason を `VC_OK` に戻す）を導入するか、M85 で手動ABORTのラッチ状態を管理する必要があります。
+    Note over W, M33: 車両は走行中（MANUAL または AUTO）
+
+    U->>W: 「ABORT」ボタン押下
+    W->>W: state = MANUAL_ABORT に移行準備 (入力完全ロック)
+    W->>M85: POST /api/control {manual_abort_request: true}
+    M85->>M33: IPC_STOP (action=VC_WEB_STOP)
+    M33->>M33: emergency_task: 即座に全出力遮断！\nvc_stop(VC_OPERATOR, 0) -> state=STOPPED, reason=VC_OPERATOR
+    M33-->>M85: IPC_STATUS (state=STOPPED, reason=VC_OPERATOR, armed=0)
+    M85-->>W: HTTP 200 {mode: "MANUAL_ABORT", armed: false, stop_reason: "MANUAL_ABORT_BUTTON"}
+    W->>W: state = MANUAL_ABORT に確定\n・停止ボタンが「RESET」に変化\n・操作パッドは完全ロック（押しても動かない）\n・中断理由「ABORT で停止」を表示
+
+    Note over U, W: 安全を確認後、運転を再開する
+
+    U->>W: 「RESET」ボタン押下
+    W->>M85: POST /api/control {reset_abort_request: true, client_mode: "MANUAL_ABORT"}
+    M85->>M33: IPC_WEB (action=VC_WEB_RESET)
+    M33->>M33: vc_web(): 中断理由をクリア\nreason = VC_OK, state=STOPPED, mode=MANUAL
+    M33-->>M85: IPC_STATUS (state=STOPPED, reason=VC_OK, armed=0)
+    M85-->>W: HTTP 200 {mode: "MANUAL", armed: false, stop_reason: "NONE"}
+    W->>W: state = MANUAL に復帰！\n・停止ボタンが「ABORT」に戻る\n・操作パッドのロック解除（D-padで再発進可能）
+```
 
 ---
 
-### 【バグ 2: 重大】EMERGENCY 中に内部異常（`VC_INTERNAL`）が発生した場合に上書きされず、ToF 離隔で誤解除される
+## 5. コード解析により発見されたバグ・設計不整合一覧（および修正内容）
+
+コード（C言語およびJavaScript）の網羅的解析により、**5件の不具合・潜在的リスク**を特定し、重要な不具合を修正・リファクタリングしました。
+
+### 【バグ 1: 重大・修正済み】手動 ABORT ボタン押下時に `MANUAL_ABORT` 画面にならず即座に `MANUAL`（走行可能）に復帰してしまう
+- **該当箇所**: `CPU0/src/web_control_adapter.c`, `control/src/vehicle_control.c`, `control/include/vehicle_control.h`
+- **問題の内容**:
+  `README.md`（デモシナリオ 7:「`ABORT` で即時停止し、`RESET` を押すまで再発進しないことを確認する」）、`docs/protocol.md`、`docs/ui-spec.md` では、画面の ABORT ボタンを押すと手動中断状態（`MANUAL_ABORT`）に遷移し、入力がロックされ、停止ボタンが「RESET」に変わり、RESETを押すまで再発進できない仕様とされていました。
+  しかし従来のコードでは、`reset_abort_request` も `manual_abort_request` も両方とも `VC_WEB_STOP` に変換されて M33 側で `VC_OPERATOR` が再セットされていたため、M85 の `response_mode()` で `VC_OPERATOR` のとき `VEHICLE_MANUAL` を返すという場当たり的な実装になっており、ABORT を押しても即座に `MANUAL` に戻ってしまっていました。
+- **修正内容**:
+  1. `vehicle_control.h` に新アクション `VC_WEB_RESET` を定義。
+  2. `web_control_adapter.c` で `reset_abort_request` を `VC_WEB_RESET` に分離し、`status->reason == VC_OPERATOR` のときは正しく `VEHICLE_MANUAL_ABORT` を返すように変更。
+  3. M33 の `vc_web()` に `VC_WEB_RESET` ハンドラを追加し、`reason` を `VC_OK` にクリアして `MANUAL` 待機へ復帰可能に改修。
+  4. Web UI 側で `Cmd.RESET` により確実に `MANUAL` 復帰するテストを追加。
+- **結果**:
+  デモシナリオ7通りの「ABORTで `MANUAL_ABORT` に遷移してロックされ、RESETを押すまで動かない」完全な安全状態遷移が実現されました。
+
+---
+
+### 【バグ 2: 重大・修正済み】EMERGENCY 中に内部異常（`VC_INTERNAL`）が発生した場合に上書きされず、ToF 離隔で誤解除される
 - **該当箇所**: `control/src/vehicle_control.c` (`vc_stop` 関数 92〜103行目)
 - **問題の内容**:
-  ```c
-  void vc_stop(vc_t *v, uint32_t why, int emergency)
-  {
-      /* An explicit ESTOP always upgrades an earlier sensor/AI emergency.
-       * Lesser stop causes never downgrade an existing emergency. */
-      if (v->status.state == VC_EMERGENCY && why != VC_ESTOP) return;
-      ...
-  }
-  ```
-  すでに `v->status.state == VC_EMERGENCY`（例えば壁に近づきすぎて `VC_TOF_NEAR` になっている状態）のときに、ハードウェア故障やカーネルの重大な内部障害が発生して `stop_locked(VC_INTERNAL, 1)` が呼ばれた場合、`why != VC_ESTOP` であるため `vc_stop` は直ちに return し、理由（`v->status.reason`）は `VC_TOF_NEAR` のまま更新されません。
-  この状態で車体を壁から離すと、`vc_step()` の自動解除処理：
-  ```c
-  if (v->status.state == VC_EMERGENCY &&
-      v->status.reason != VC_INTERNAL && v->status.reason != VC_ESTOP && ...)
-      (void)vc_clear_emergency(v, now);
-  ```
-  において、`v->status.reason` が `VC_TOF_NEAR` のままであるため、内部異常が発生しているにもかかわらず `clear_check()` をパスし、**EMERGENCY が勝手に自動解除されて `VC_STOPPED` に戻ってしまいます。**
-- **影響**:
-  基板リセットが必要なハードウェア/OS障害（`VC_INTERNAL`）が隠蔽され、再発進可能な状態に遷移してしまう安全上のリスク（フェイルセーフ原則の違反）。
-- **対策**:
-  `if (v->status.state == VC_EMERGENCY && why != VC_ESTOP && why != VC_INTERNAL) return;` のように、`VC_INTERNAL` も最優先の上書き対象として扱う必要があります。
+  すでに `v->status.state == VC_EMERGENCY`（例えば壁に近づきすぎて `VC_TOF_NEAR` になっている状態）のときに、ハードウェア故障やカーネルの重大な内部障害が発生して `stop_locked(VC_INTERNAL, 1)` が呼ばれた場合、以前は `why != VC_ESTOP` のみ判定していたため `vc_stop` は直ちに return し、理由（`v->status.reason`）は `VC_TOF_NEAR` のまま更新されませんでした。
+  この状態で車体を壁から離すと、`v->status.reason` が `VC_TOF_NEAR` のままであるため、内部異常が発生しているにもかかわらず `clear_check()` をパスし、EMERGENCY が勝手に自動解除されて `VC_STOPPED` に戻ってしまう重大な安全欠陥がありました。
+- **修正内容**:
+  `vc_stop()` の判定を `if (v->status.state == VC_EMERGENCY && why != VC_ESTOP && why != VC_INTERNAL) return;` に修正。`VC_INTERNAL` も最優先で上書きされ、基板リセットするまで確実にラッチされるように改修。
 
 ---
 
@@ -352,14 +351,10 @@ sequenceDiagram
 
 ---
 
-### 【バグ 5: 軽微】`vc_step()` 内の旧 `VC_AI_OBSTACLE` チェックのデッドコード
-- **該当箇所**: `control/src/vehicle_control.c` (345行目)
+### 【バグ 5: 軽微・修正済み】`vc_step()` 内の旧 `VC_AI_OBSTACLE` チェックのデッドコード
+- **該当箇所**: `control/src/vehicle_control.c`
 - **問題の内容**:
-  ```c
-  if (v->status.state == VC_EMERGENCY &&
-      v->status.reason != VC_INTERNAL && v->status.reason != VC_ESTOP &&
-      (v->status.reason != VC_AI_OBSTACLE || p.motor_enable))
-      (void)vc_clear_emergency(v, now);
-  ```
-  2026-09-28 の改修により、AIによる障害物検知は EMERGENCY ではなく TOR（`VC_TOR_OBSTACLE`）に変更されました（`vehicle_control.h` にも `VC_AI_OBSTACLE, /* no longer produced */` と明記）。
-  したがって、`v->status.state == VC_EMERGENCY` かつ `reason == VC_AI_OBSTACLE` になることは決してなく、この条件式は不要な残骸となっています。
+  2026-09-28 の改修により、AIによる障害物検知は EMERGENCY ではなく TOR（`VC_TOR_OBSTACLE`）に変更されました。
+  そのため、`v->status.state == VC_EMERGENCY` かつ `reason == VC_AI_OBSTACLE` になることは決してなく、`vc_step()` の `(v->status.reason != VC_AI_OBSTACLE || p.motor_enable)` 条件式は不要な残骸となっていました。
+- **修正内容**:
+  該当の不要な条件式を削除し、コードをシンプルに整理しました。

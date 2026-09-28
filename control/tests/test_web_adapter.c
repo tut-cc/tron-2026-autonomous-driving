@@ -87,10 +87,10 @@ static void test_request_to_command(void)
     assert(web_adapter_request_to_command(&request, &command) == 0);
     assert(command.action == VC_WEB_DRIVE && command.mode == VC_MODE_MANUAL);
     assert(command.deadman == 0U && command.linear == 0);
-    /* reset_abort from the abort screen is still an explicit STOP. */
+    /* reset_abort from the abort screen produces a VC_WEB_RESET command. */
     request.reset_abort_request = true;
     assert(web_adapter_request_to_command(&request, &command) == 0);
-    assert(command.action == VC_WEB_STOP);
+    assert(command.action == VC_WEB_RESET);
 
     /* Mode switch requests: the explicit request wins over client_mode. */
     request = (control_request_t){0};
@@ -204,6 +204,10 @@ static void test_status_to_response(void)
     status.state = VC_STOPPED; status.reason = VC_OK;
     web_adapter_status_to_response(&status, &response);
     assert(response.mode == VEHICLE_MANUAL && response.stop_reason == STOP_REASON_NONE);
+    /* Operator abort while stopped reports VEHICLE_MANUAL_ABORT until reset. */
+    status.state = VC_STOPPED; status.reason = VC_OPERATOR;
+    web_adapter_status_to_response(&status, &response);
+    assert(response.mode == VEHICLE_MANUAL_ABORT && response.stop_reason == STOP_REASON_MANUAL_ABORT_BUTTON);
 
     /* Person/car alarm word from the M85 camera task. */
     web_adapter_obstacle_alarm((3U << AUTONOMY_ALARM_SEQ_SHIFT) | AUTONOMY_ALARM_ACTIVE |
@@ -235,15 +239,14 @@ static void test_gateway(void)
     assert(ipc_control_init(&endpoint, 0x42U, 0U) == 0);
     assert(ipc_gateway_init(&gateway, &endpoint) == 0);
 
-    /* A web reset is STOP-only and remains urgent when a later DRIVE arrives. */
+    /* A web reset sends VC_WEB_RESET to clear abort states. */
     request = drive();
     request.reset_abort_request = true;
     assert(submit(&gateway, &request) == 0);
-    request = drive();
-    assert(submit(&gateway, &request) == 0);
     assert(ipc_gateway_step(&gateway, 10U) == 0);
-    assert_stop_slot(&endpoint, VC_WEB_STOP);
-    assert(ipc_read(&endpoint, IPC_WEB, &packet) == IPC_EMPTY);
+    assert(ipc_read(&endpoint, IPC_STOP, &packet) == IPC_EMPTY);
+    assert(ipc_read(&endpoint, IPC_WEB, &packet) == IPC_OK);
+    assert(ipc_unpack_web(&packet, &command) == 0 && command.action == VC_WEB_RESET);
 
     /* An explicit manual abort is urgent too, even if a later DRIVE arrives. */
     request = drive();
@@ -363,10 +366,14 @@ static void test_tor(void)
     web_adapter_status_to_response(&status, &response);
     assert(response.mode == VEHICLE_AUTO_ABORT && response.stop_reason == STOP_REASON_TOR_TIMEOUT);
     assert(!response.tor_active && !response.armed && response.request_reject_reason == REQUEST_REJECT_NONE);
-    /* After the reset (Web STOP -> VC_OPERATOR) it is plain MANUAL again. */
+    /* Operator abort (VC_OPERATOR) is MANUAL_ABORT until reset. */
     status.reason = VC_OPERATOR;
     web_adapter_status_to_response(&status, &response);
-    assert(response.mode == VEHICLE_MANUAL && response.stop_reason == STOP_REASON_MANUAL_ABORT_BUTTON);
+    assert(response.mode == VEHICLE_MANUAL_ABORT && response.stop_reason == STOP_REASON_MANUAL_ABORT_BUTTON);
+    /* After reset (reason cleared to VC_OK) it is plain MANUAL again. */
+    status.reason = VC_OK;
+    web_adapter_status_to_response(&status, &response);
+    assert(response.mode == VEHICLE_MANUAL && response.stop_reason == STOP_REASON_NONE);
     printf("PASS web adapter TOR: tor_active, M33-clock countdown (wrap-safe, clamp, reset), TOR_TIMEOUT -> AUTO_ABORT until reset\n");
 }
 

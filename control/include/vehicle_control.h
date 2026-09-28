@@ -41,7 +41,7 @@ static inline int vc_reason_is_auto_refusal(uint32_t reason)
 { return reason >= VC_AUTO_REFUSED_TOF && reason <= VC_AUTO_REFUSED_PATH; }
 /* Web command action (vc_web_t.action).  STOP/ESTOP use the reserved IPC
  * stop slot; see vc_web_action_is_stop(). */
-typedef enum { VC_WEB_DRIVE, VC_WEB_STOP, VC_WEB_MODE, VC_WEB_ESTOP } vc_web_action_t;
+typedef enum { VC_WEB_DRIVE, VC_WEB_STOP, VC_WEB_MODE, VC_WEB_ESTOP, VC_WEB_RESET } vc_web_action_t;
 
 /* Result of vc_start() / vc_clear_emergency(): VC_ARM_OK or why it was
  * refused.  The last value is also mirrored in g_vc_start_result /

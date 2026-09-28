@@ -91,9 +91,9 @@ void vc_init(vc_t *v, uint32_t now)
  * fault) stay latched until a board reset. */
 void vc_stop(vc_t *v, uint32_t why, int emergency)
 {
-    /* An explicit ESTOP always upgrades an earlier sensor/AI emergency.
+    /* An explicit ESTOP or internal fault always upgrades an earlier sensor/AI emergency.
      * Lesser stop causes never downgrade an existing emergency. */
-    if (v->status.state == VC_EMERGENCY && why != VC_ESTOP) return;
+    if (v->status.state == VC_EMERGENCY && why != VC_ESTOP && why != VC_INTERNAL) return;
     v->status.armed = 0;
     v->status.mode = VC_MODE_MANUAL;
     v->left = v->right = 0;
@@ -173,7 +173,7 @@ void vc_fence_web(vc_t *v, uint32_t stop_seq, uint32_t now)
 vc_input_result_t vc_web(vc_t *v, const vc_web_t *w, uint32_t now)
 {
     vc_input_result_t why = VC_INPUT_ACCEPTED;
-    if (!w || w->action > VC_WEB_ESTOP || w->mode > VC_MODE_MANUAL ||
+    if (!w || w->action > VC_WEB_RESET || w->mode > VC_MODE_MANUAL ||
         w->deadman > 1 || !vc_permille_ok(w->linear) || !vc_permille_ok(w->steering))
         why = VC_INPUT_INVALID;
     else if (!fresh(now, w->timestamp_ms, VC_WEB_TIMEOUT_MS))
@@ -198,6 +198,18 @@ vc_input_result_t vc_web(vc_t *v, const vc_web_t *w, uint32_t now)
     }
     if (v->in.have_web && !newer(w->seq, v->in.web.seq)) return VC_INPUT_NOT_NEWER;
     v->in.web = *w; v->in.have_web = 1; v->status.web_seq = w->seq;
+    /* Web RESET button from the abort screen: clear manual abort or TOR timeout
+     * back to normal stopped MANUAL, or attempt to clear recoverable emergency. */
+    if (w->action == VC_WEB_RESET) {
+        if (v->status.state == VC_EMERGENCY) {
+            (void)vc_clear_emergency(v, now);
+        } else if (v->status.state == VC_STOPPED) {
+            if (v->status.reason == VC_OPERATOR || v->status.reason == VC_TOR_TIMEOUT) {
+                v->status.reason = VC_OK;
+            }
+        }
+        return VC_INPUT_ACCEPTED;
+    }
     /* AUTO button: start autonomous driving (if ToF/link/AI path are OK).
      * MANUAL button (or any stop): back to MANUAL. */
     if (w->action == VC_WEB_MODE && w->mode != v->status.mode) {
@@ -341,8 +353,7 @@ void vc_step(vc_t *v, uint32_t now, control_motor_output_t *out)
      * internal faults stay latched.  Driving again still needs a new D-pad
      * press or AUTO button. */
     if (v->status.state == VC_EMERGENCY &&
-        v->status.reason != VC_INTERNAL && v->status.reason != VC_ESTOP &&
-        (v->status.reason != VC_AI_OBSTACLE || p.motor_enable))
+        v->status.reason != VC_INTERNAL && v->status.reason != VC_ESTOP)
         (void)vc_clear_emergency(v, now);
 
     /* TOR unanswered: safe stop.  The driver sees TOR_TIMEOUT and must reset

@@ -116,7 +116,7 @@ test('TOR take-over and the mode button in AUTO ask for MANUAL', () => withMachi
     assert.equal(m.state, UIState.AUTO_MANUAL_PENDING);
 }));
 
-test('ABORT preempts a mode request and is re-sent until a fresh unarmed status', () => withMachine(({ m, roundTrip }) => {
+test('ABORT preempts a mode request and enters MANUAL_ABORT', () => withMachine(({ m, roundTrip }) => {
     m.requestDriveModeToggle();
     m.requestAbortAction();
     let p = roundTrip(status(0, { mode: 'AUTO', armed: true }));
@@ -124,11 +124,28 @@ test('ABORT preempts a mode request and is re-sent until a fresh unarmed status'
     p = roundTrip(status(0));
     assert.equal(p.manual_abort_request, true);
     assert.equal(m.pending?.kind, Cmd.STOP, 'unchanged web_seq may be a stale snapshot');
-    p = roundTrip(status(1));
+    p = roundTrip(status(1, { mode: 'MANUAL_ABORT' }));
     assert.equal(p.manual_abort_request, true);
     assert.equal(m.pending, null);
-    assert.equal(m.state, UIState.MANUAL, 'M33 stop selects MANUAL: no extra MANUAL request');
+    assert.equal(m.state, UIState.MANUAL_ABORT);
     assert.equal(m.nextRequest().payload.manual_abort_request, false);
+}));
+
+test('ABORT enters MANUAL_ABORT, and RESET returns to MANUAL', () => withMachine(({ m, app, roundTrip }) => {
+    assert.equal(m.state, UIState.MANUAL);
+    assert.equal(app.input.enabled, true);
+    m.requestAbortAction();
+    assert.equal(app.input.enabled, false);
+    roundTrip(status(1, { mode: 'MANUAL_ABORT', stop_reason: 'MANUAL_ABORT_BUTTON' }));
+    assert.equal(m.state, UIState.MANUAL_ABORT);
+    assert.equal(app.input.enabled, false);
+
+    /* Click RESET button on the abort screen */
+    m.requestAbortAction();
+    assert.equal(m.pending?.kind, Cmd.RESET);
+    roundTrip(status(2, { mode: 'MANUAL', stop_reason: 'NONE' }));
+    assert.equal(m.state, UIState.MANUAL);
+    assert.equal(app.input.enabled, true);
 }));
 
 test('RESET on the abort screen does not clear an M33 Emergency', () => withMachine(({ m, roundTrip }) => {
