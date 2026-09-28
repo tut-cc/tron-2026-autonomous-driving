@@ -38,7 +38,8 @@ ARCHIVE = ROOT.parent / 'demo_evidence_archive'
 STRAY_ALWAYS = ['CPU0/JLinkLog.log', 'CPU1/JLinkLog.log']  # e2 studio writes these while debugging
 JS_TESTS = ['M85Web/Application/mini-4wd-webapp/tests/state-machine.test.mjs',
             'M85Web/Application/mini-4wd-webapp/tests/comm.test.mjs',
-            'M85Web/Application/mini-4wd-webapp/tests/video.test.mjs']
+            'M85Web/Application/mini-4wd-webapp/tests/video.test.mjs',
+            'M85Web/Application/mini-4wd-webapp/tests/ui.test.mjs']
 
 
 def sha256(path):

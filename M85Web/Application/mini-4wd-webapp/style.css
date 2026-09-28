@@ -125,7 +125,7 @@ html, body {
 body[data-obstacle-alarm="true"] #alarm-badge { display: inline-flex; }
 #manual-advisory {
   display: none; position: fixed; top: calc(108px + env(safe-area-inset-top, 0px));
-  left: 50%; translate: -50% 0; width: min(94%, 560px); z-index: 95;
+  left: 50%; translate: -50% 0; width: min(94%, 760px); z-index: 95;
   padding: 14px 18px; border: 3px solid #7a0000; border-radius: 10px;
   background: #c90016; color: #fff; font-size: clamp(1.1rem, 3.6vw, 1.45rem); font-weight: 900;
   text-align: center; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.65);
