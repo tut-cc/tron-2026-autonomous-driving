@@ -140,15 +140,16 @@ static void make_perception(ai_perception_result_t * perception,
     perception->seq = ++g_perception_seq;
     perception->capture_timestamp_ms = now_ms;
 
-    if ((NULL == navigation) || (NULL == detections) ||
-        (0U == width) || (0U == height))
+    if ((NULL == navigation) || (0U == width) || (0U == height))
     {
         return;
     }
 
     uint32_t age = autonomy_controller_now_ms() - now_ms;
     perception->processing_time_ms = (uint16_t)(age > 65535U ? 65535U : age);
-    perception->obstacle_valid = 1U;
+    /* Obstacle inference is advisory and independent of road navigation. A
+     * missing detector result must not invalidate an otherwise usable path. */
+    perception->obstacle_valid = (uint8_t)(NULL != detections);
 
     uint8_t path_geometry_valid =
         (uint8_t) ((navigation->path_count > 0U) &&
@@ -200,7 +201,7 @@ static void make_perception(ai_perception_result_t * perception,
                         1.0F);
     }
 
-    uint32_t count = detections->detection_count;
+    uint32_t count = (NULL != detections) ? detections->detection_count : 0U;
     if (count > OBSTACLE_DETECTOR_MAX_DETECTIONS)
     {
         count = OBSTACLE_DETECTOR_MAX_DETECTIONS;

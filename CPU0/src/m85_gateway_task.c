@@ -70,7 +70,15 @@ static void gateway_task(INT stacd, void * exinf)
         tk_dly_tsk(1);
     }
 
+    /* HTTP may have accepted normal commands while M33 was still starting.
+     * Fence the latest-value mailbox at startup so an old DRIVE/MODE is not
+     * replayed with a fresh IPC timestamp. Urgent STOP/ESTOP uses its separate
+     * retained slot and is still forwarded below. */
+    control_request_t startup_request;
+    uint32_t startup_received;
     uint32_t forwarded_revision = 0U;
+    (void) control_if_get_request_snapshot(&startup_request, &startup_received,
+                                           &forwarded_revision);
     for (;;)
     {
         forward_urgent_request();

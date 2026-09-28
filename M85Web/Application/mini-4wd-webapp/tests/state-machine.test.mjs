@@ -87,20 +87,20 @@ test('a response to a POST sent before the click cannot confirm it', () => withM
     assert.equal(m.pending?.kind, Cmd.AUTO);
 }));
 
-test('AUTO timeout switches to MANUAL, which unlocks only on fresh MANUAL + unarmed', () => withMachine(({ m, app, errors, roundTrip }) => {
+test('AUTO timeout cancels only the pending UI request; delayed acknowledgement remains authoritative', () => withMachine(({ m, app, errors }) => {
     m.requestDriveModeToggle();
+    const { context } = m.nextRequest();
     m.onTimeout();
     assert.match(errors.at(-1), /タイムアウト/);
-    assert.equal(m.state, UIState.AUTO_MANUAL_PENDING);
-
-    const p = roundTrip(status(0));
-    assert.deepEqual([p.mode_request, p.client_mode, p.deadman, p.throttle], [ModeRequest.MANUAL, 'MANUAL', false, 0]);
-    assert.equal(m.state, UIState.AUTO_MANUAL_PENDING, 'stale snapshot');
-    roundTrip(status(1, { armed: true }));
-    assert.equal(m.state, UIState.AUTO_MANUAL_PENDING, 'armed MANUAL is not safe to unlock');
-    roundTrip(status(2));
+    assert.equal(m.pending, null);
     assert.equal(m.state, UIState.MANUAL);
-    assert.equal(app.input.enabled, true);
+    assert.deepEqual(m.nextRequest().payload.mode_request, ModeRequest.NONE,
+                     'timeout must not synthesize a MANUAL request');
+
+    m.handleHeartbeat(status(1, { mode: 'AUTO', armed: true }), context);
+    assert.equal(m.state, UIState.AUTO, 'a late M33 acknowledgement mirrors actual vehicle state');
+    assert.equal(m.pending, null);
+    assert.equal(app.input.enabled, false);
 }));
 
 test('TOR take-over and the mode button in AUTO ask for MANUAL', () => withMachine(({ m, roundTrip }) => {
@@ -167,13 +167,15 @@ test('an ABORT status from M33 cancels a pending mode switch', () => withMachine
     assert.equal(m.state, UIState.AUTO_ABORT);
 }));
 
-test('disconnect during AUTO request turns it into a MANUAL request', () => withMachine(({ m, errors }) => {
+test('disconnect during AUTO request cancels pending UI state without synthesizing MANUAL', () => withMachine(({ m, errors }) => {
     m.requestDriveModeToggle();
     m.handleDisconnect();
     assert.equal(m.state, UIState.DISCONNECTED);
     assert.match(errors.at(-1), /通信切断/);
+    assert.equal(m.pending, null);
     m.handleConnect();
-    assert.equal(m.state, UIState.AUTO_MANUAL_PENDING);
+    assert.equal(m.state, UIState.MANUAL);
+    assert.equal(m.nextRequest().payload.mode_request, ModeRequest.NONE);
 }));
 
 test('web_seq comparison handles uint32 wraparound', () => {

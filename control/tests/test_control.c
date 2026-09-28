@@ -178,9 +178,8 @@ static void test_core(void) {
     puts("PASS control: MANUAL boot, D-pad drive/release, no-reverse, web fail-safe, ToF 100mm stop / 50mm emergency + hysteresis, ESTOP latched until reset, AUTO start/stop, wrap");
 }
 static void auto_running(vc_t *v, uint32_t *now, uint32_t *seq);
-/* 2026-09-28 demo layout: a person/car in the corridor is an alarm (M85) and
- * a slowdown; AUTO hands over (TOR) only within VC_OBSTACLE_TOR_MM on the ToF
- * or when the box reaches the bottom of the image.  MANUAL ignores it. */
+/* Person/car detections are logged by the M85 only. Detection results, even
+ * when unstable or unavailable, do not affect M33 mode or motor output. */
 static void obstacle_frame(vc_t *v,uint32_t seq,uint32_t now,uint16_t tof_mm,
                            float conf,float overlap,float bottom) {
     ai_perception_result_t a=ai(seq,now);tof_safety_result_t t={seq,now,tof_mm,1,0};
@@ -189,43 +188,66 @@ static void obstacle_frame(vc_t *v,uint32_t seq,uint32_t now,uint16_t tof_mm,
         .center_x=0.0F,.bbox_bottom=bottom};
     assert(vc_ai(v,&a,now)==0&&vc_tof(v,&t,now)==0);vc_link(v,now);
 }
-static void test_obstacle_tor(void) {
-    vc_t v;control_motor_output_t o;uint32_t now,seq;unsigned i;
-    /* Far person in the corridor: keep driving (slower), no stop. */
+static void test_obstacle_alarm_only(void) {
+    vc_t v;control_motor_output_t o;uint32_t now,seq;unsigned i;float baseline_speed_scale;
+    /* A person detection is advisory and leaves AUTO output unchanged. */
     auto_running(&v,&now,&seq);
-    for(i=0;i<5;++i){now+=10;obstacle_frame(&v,++seq,now,500,.95F,.9F,.6F);vc_step(&v,now,&o);}
+    now+=10;feed(&v,++seq,now);vc_step(&v,now,&o);
+    baseline_speed_scale=o.speed_scale;
+    for(i=0;i<5;++i){
+        ai_perception_result_t a;
+        tof_safety_result_t t;
+        now+=10;a=ai(++seq,now);a.obstacle_count=1;
+        a.obstacles[0]=(ai_obstacle_result_t){.confidence=.95F,.corridor_overlap=.9F,
+            .center_x=0.0F,.bbox_bottom=.6F};
+        t=(tof_safety_result_t){seq,now,500,1,0};
+        assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);
+        vc_step(&v,now,&o);
+        assert(o.motor_enable&&v.status.armed&&v.status.state==VC_AUTO);
+        assert(o.speed_scale==baseline_speed_scale);
+    }
     assert(o.motor_enable&&v.status.armed&&v.status.state==VC_AUTO);
-    /* Within VC_OBSTACLE_TOR_MM: TOR with its own reason, output 0 at once. */
-    now+=10;obstacle_frame(&v,++seq,now,VC_OBSTACLE_TOR_MM,.95F,.9F,.6F);vc_step(&v,now,&o);
-    assert(!o.motor_enable&&!v.status.armed&&v.status.state==VC_TOR);
-    assert(v.status.mode==VC_MODE_AUTO&&v.status.reason==VC_TOR_OBSTACLE);
-    /* Take-over: MANUAL drives next to the person (only the ToF wall stops). */
-    assert(web(&v,VC_WEB_MODE,VC_MODE_MANUAL,0,0,0,now)==0&&v.status.state==VC_STOPPED);
-    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,now)==0&&v.status.armed);
-    for(i=0;i<5;++i){now+=10;obstacle_frame(&v,++seq,now,200,.95F,.9F,.99F);
-        assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,now)==0);vc_step(&v,now,&o);}
-    assert(o.motor_enable&&v.status.state==VC_MANUAL);
-    /* Unanswered obstacle TOR ends like any TOR. */
-    auto_running(&v,&now,&seq);
-    now+=10;obstacle_frame(&v,++seq,now,200,.95F,.9F,.6F);vc_step(&v,now,&o);
-    assert(v.status.reason==VC_TOR_OBSTACLE);
-    {uint32_t t0=now;while(now<t0+VC_TOR_TIMEOUT_MS){now+=10;obstacle_frame(&v,++seq,now,200,.95F,.9F,.6F);vc_step(&v,now,&o);}}
-    assert(v.status.state==VC_STOPPED&&v.status.reason==VC_TOR_TIMEOUT&&!o.motor_enable);
-    /* Object below the ToF beam: the box at the image bottom also hands over. */
-    auto_running(&v,&now,&seq);
-    now+=10;obstacle_frame(&v,++seq,now,500,.95F,.9F,.96F);vc_step(&v,now,&o);
-    assert(v.status.state==VC_TOR&&v.status.reason==VC_TOR_OBSTACLE);
-    /* Not in the corridor, or not confident: no hand-over even when near. */
+    /* Near ToF and image-bottom detections still don't change mode or disarm. */
+    for(i=0;i<8;++i){
+        now+=10;
+        obstacle_frame(&v,++seq,now,200,.95F,.9F,(i&1U)? .96F:.60F);
+        vc_step(&v,now,&o);
+        assert(o.motor_enable&&v.status.armed&&v.status.state==VC_AUTO&&
+               v.status.mode==VC_MODE_AUTO);
+    }
+    /* Losing/reacquiring the detection also cannot cause mode churn. */
+    for(i=0;i<4;++i){
+        ai_perception_result_t a;
+        tof_safety_result_t t;
+        now+=10;a=ai(++seq,now);t=(tof_safety_result_t){seq,now,500,1,0};
+        if(i&1U){a.obstacle_count=1;a.obstacles[0]=(ai_obstacle_result_t){
+            .confidence=.95F,.corridor_overlap=.9F,.center_x=0.0F,.bbox_bottom=.96F};}
+        assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);
+        vc_step(&v,now,&o);
+        assert(o.motor_enable&&v.status.armed&&v.status.state==VC_AUTO);
+    }
+    /* A transiently unavailable obstacle detector is advisory too: preserve
+     * a valid road path and keep the current AUTO mode. */
+    for(i=0;i<4;++i){
+        ai_perception_result_t a;
+        tof_safety_result_t t;
+        now+=10;a=ai(++seq,now);a.obstacle_valid=(uint8_t)(i&1U);
+        t=(tof_safety_result_t){seq,now,500,1,0};
+        assert(vc_ai(&v,&a,now)==0&&vc_tof(&v,&t,now)==0);vc_link(&v,now);
+        vc_step(&v,now,&o);
+        assert(o.motor_enable&&v.status.armed&&v.status.state==VC_AUTO);
+    }
+    /* Non-corridor / low-confidence detections remain non-blocking. */
     auto_running(&v,&now,&seq);
     for(i=0;i<3;++i){now+=10;obstacle_frame(&v,++seq,now,200,.95F,.2F,.9F);vc_step(&v,now,&o);}
     assert(o.motor_enable&&v.status.state==VC_AUTO);
     for(i=0;i<3;++i){now+=10;obstacle_frame(&v,++seq,now,200,.5F,.9F,.9F);vc_step(&v,now,&o);}
     assert(o.motor_enable&&v.status.state==VC_AUTO);
-    /* An AUTO start is refused while a person is already that close. */
+    /* AUTO can start while the independent ToF is clear even with an alarm. */
     boot(&v);obstacle_frame(&v,4,30,200,.95F,.9F,.6F);
-    assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0&&!v.status.armed);
-    assert(v.status.reason==VC_AUTO_REFUSED_PATH);
-    printf("PASS obstacle: alarm-only when far, TOR within %umm or at image bottom, MANUAL unaffected, TOR timeout, corridor/confidence limits, AUTO refused when near\n",(unsigned)VC_OBSTACLE_TOR_MM);
+    assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,30)==0&&v.status.armed);
+    assert(v.status.mode==VC_MODE_AUTO&&v.status.state==VC_AUTO);
+    printf("PASS obstacle: alarm only, no motor/mode response to near/flickering detections, independent ToF safety\n");
 }
 /* Wheel-balance trim: a car that drifts left keeps seeing the road to the
  * right; AUTO learns the correction (bounded), MANUAL ▲ applies it, and
@@ -531,4 +553,4 @@ static void test_steering_sign(void) {
     assert(o.motor_enable&&o.right_command>o.left_command);      /* left button */
     puts("PASS steering sign: AUTO right error and MANUAL left button use the vehicle convention");
 }
-int main(void){test_steering_sign();test_core();test_ipc();test_driver();test_slow_ai_period();test_path_confidence_band();test_tor();test_obstacle_tor();test_steering_trim();test_results();return 0;}
+int main(void){test_steering_sign();test_core();test_ipc();test_driver();test_slow_ai_period();test_path_confidence_band();test_tor();test_obstacle_alarm_only();test_steering_trim();test_results();return 0;}

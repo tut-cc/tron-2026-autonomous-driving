@@ -23,8 +23,10 @@
  *   AUTO    mode_request=AUTO           mode=AUTO, or rejected -> MANUAL
  *   MANUAL  mode_request=MANUAL         mode=MANUAL and armed=false
  *
- * AUTO gives up after MODE_SWITCH_TIMEOUT_MS and asks for MANUAL instead.
- * MANUAL never gives up.  An ABORT status from M33 cancels AUTO/MANUAL.
+ * AUTO gives up waiting after MODE_SWITCH_TIMEOUT_MS and returns to the last
+ * M33 state. It never synthesizes a MANUAL request: M33 owns AUTO safety, and
+ * a delayed response may still confirm the original request. MANUAL never
+ * gives up. An ABORT status from M33 cancels AUTO/MANUAL.
  */
 import { UIState, MCUMode, ModeRequest, RejectReasonText, Config } from './constants.js';
 
@@ -88,7 +90,7 @@ export class StateMachine {
     onTimeout() {
         if (this.pending?.kind === Cmd.AUTO) {
             this.app.ui.showError('モード切替タイムアウト');
-            this.setPending(Cmd.MANUAL);
+            this.setPending(null);
         } else if (this.pending?.kind === Cmd.MANUAL) {
             if (this.connected) this.app.ui.showError('手動復帰の応答待ち (再送中...)');
             this.timer = setTimeout(() => this.onTimeout(), Config.MODE_SWITCH_TIMEOUT_MS);
@@ -178,7 +180,7 @@ export class StateMachine {
         this.connected = false;
         if (this.pending?.kind === Cmd.AUTO) {
             this.app.ui.showError('通信切断によりAUTO要求を中断');
-            this.setPending(Cmd.MANUAL);
+            this.setPending(null);
         } else {
             this.render();
         }

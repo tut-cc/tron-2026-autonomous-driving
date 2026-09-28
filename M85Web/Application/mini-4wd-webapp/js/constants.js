@@ -8,7 +8,7 @@ export const ModeRequest = { NONE: 'NONE', MANUAL: 'MANUAL', AUTO: 'AUTO' };
 
 export const StopReasonText = {
     OBSTACLE:            '障害物検知',
-    AI_OBSTACLE:         '人物・車が接近：運転を引き継いでください',
+    AI_OBSTACLE:         '旧版の障害物停止理由（現行はアラームとログで通知）',
     ROAD_UNAVAILABLE:    '走行経路を認識できず停止',
     DISTANCE_EMERGENCY:  '前方50 mmで距離による緊急停止（ToF）',
     DISTANCE_PRESTOP:    '前方100 mmで通常停止（ToF）',
