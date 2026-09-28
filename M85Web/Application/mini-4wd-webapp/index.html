@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>ミニ四駆コントローラー</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -40,7 +40,10 @@
 
   <div id="alert-banner" popover="manual">エラー通知</div>
 
-  <!-- 操作フッター (左右パッド / 中断理由 / モード切替 / ABORT) -->
+  <!-- 中断理由：モード切替の拒否理由（#alert-banner）と同じ画面上部中央に表示する -->
+  <div id="stop-reason" role="status" aria-live="polite">中断理由: <span id="stop-reason-text">NONE</span></div>
+
+  <!-- 操作フッター (左右パッド / モード切替 / ABORT) -->
   <footer class="bottom-bar">
     <div id="pad-steer" class="pad pad-steer" role="group" aria-label="左右（右手）">
       <button type="button" id="pad-left" class="pad-btn pad-left" data-dir="left" aria-label="左">
@@ -50,7 +53,6 @@
         <svg viewBox="0 0 24 24" width="36" height="36"><path d="M19 12 L7 4 L7 20 Z" fill="currentColor"/></svg>
       </button>
     </div>
-    <div id="stop-reason">中断理由: <span id="stop-reason-text">NONE</span></div>
     <div class="action-row">
       <button id="btn-mode" class="action-btn">MANUAL MODE</button>
       <button id="btn-stop" class="action-btn btn-stop">ABORT</button>

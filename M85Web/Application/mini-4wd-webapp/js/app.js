@@ -3,7 +3,7 @@ import { UIManager       } from './ui.js';
 import { CommManager     } from './comm.js';
 import { StateMachine    } from './state-machine.js';
 import { DebugManager    } from './debug-ui.js';
-import { installSelectionGuard, installLandscape } from './screen.js';
+import { installSelectionGuard, installLandscape, installZoomGuard } from './screen.js';
 
 export class Mini4WDApp {
     constructor() {
@@ -31,6 +31,7 @@ export class Mini4WDApp {
 const initApp = () => {
     if (window.app) return;
     installSelectionGuard();
+    installZoomGuard();
     installLandscape();
     window.app = new Mini4WDApp();
 };
