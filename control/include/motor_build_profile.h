@@ -56,7 +56,7 @@
  * 0.0F lets the car learn it on every power-up; set a non-zero value to apply
  * an initial individual motor correction immediately from boot. */
 #ifndef MOTOR_STEERING_TRIM_INITIAL
-#define MOTOR_STEERING_TRIM_INITIAL -0.03F
+#define MOTOR_STEERING_TRIM_INITIAL 0.0F
 #endif
 
 #define MOTOR_BUILD_PROFILE_NAME \

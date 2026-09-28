@@ -2,46 +2,46 @@
   "artifacts": {
     "CPU0": {
       "elf": {
-        "bytes": 24306772,
+        "bytes": 24308812,
         "path": "CPU0/Build/CPU0.elf",
-        "sha256": "4150EB9EC7349FF681FCA542F4DFA02CD9B40FDE37127A07E4E89F66C56D1112"
+        "sha256": "9B61B680CA3B9305B39E4FBBDB07A0239582F0D6CFC68944C8ED571C3207A917"
       },
       "map": {
-        "bytes": 1989288,
+        "bytes": 2010713,
         "path": "CPU0/Build/CPU0.map",
-        "sha256": "C5177C33143190230C201F5F5A5A99C602EE218E87397D188B6B03901AD6DC8C"
+        "sha256": "3B9C3F2C45C17B49D54E5697E97C714025D32F2ACDB93753BBE0CE6555992D21"
       },
       "srec": {
-        "bytes": 2853250,
+        "bytes": 2858034,
         "path": "CPU0/Build/CPU0.srec",
-        "sha256": "313CB60224598B93C101A485936AC0855C1AC457A4A346E41757150804E3AEB9"
+        "sha256": "8CAA0C4B0905677BFFDA979B6EF5DC48FD4594F64AB2BC76AF9568F5882FCE35"
       }
     },
     "CPU1": {
       "elf": {
-        "bytes": 974832,
+        "bytes": 974904,
         "path": "CPU1/Build/CPU1.elf",
-        "sha256": "FCB9260085292370980286179ABECBCF5E799572EE4859EAB8C19D367A11E1F8"
+        "sha256": "C170D72D8AF52759ACE83C3D1EA2E16C0B06DABAD67246B4D826734E0175DC0F"
       },
       "map": {
-        "bytes": 177888,
+        "bytes": 178200,
         "path": "CPU1/Build/CPU1.map",
-        "sha256": "B9C8654C2BED3A37086883F8858ABD2CBEB1ED8AF48983A2C7004D9DFE044EAA"
+        "sha256": "AACAA1A4A8F1EF694AB6CD518567F557C0E2FE80848E64810ABEA9775E82AA25"
       },
       "srec": {
-        "bytes": 98680,
+        "bytes": 98664,
         "path": "CPU1/Build/CPU1.srec",
-        "sha256": "E17043DA71DBE0F935B51B9D0590D6A931CD39D8076BF8EEABB0690E7B1E0E2B"
+        "sha256": "C8263A2FD765372AA7489736BBF904FAB00D4AFB93E1664B89884DA9925797A7"
       }
     }
   },
   "build_evidence_date": "2026-09-28",
   "build_profiles": {
     "CPU0": {
-      "bytes": 547,
+      "bytes": 572,
       "metadata": {
         "allow_physical_output": true,
-        "compiler": "C:\\Renesas\\e2_studio\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
+        "compiler": "C:\\Renesas\\RA\\e2studio_v2026-04.2_fsp_v6.5.0\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
         "compiler_version": "21.1.1",
         "core": "CPU0",
         "flags_sha256": "F73F950FF67012D0A6BA5EC92A72A2D5C60E4C36DFDB468C1943A671AE90A10F",
@@ -53,13 +53,13 @@
         "source": "build.py"
       },
       "path": "CPU0/Build/build_profile.json",
-      "sha256": "4C7AD3713ADA4CA774C5CECB9AC606F6CA77AC6A77E0083A5CD8F05B152B9A1C"
+      "sha256": "CCB1DAC94A4D29736333C4AC4F3AD8FAFA517E8C2EF687A871C63AE4D4A96BC7"
     },
     "CPU1": {
-      "bytes": 547,
+      "bytes": 572,
       "metadata": {
         "allow_physical_output": true,
-        "compiler": "C:\\Renesas\\e2_studio\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
+        "compiler": "C:\\Renesas\\RA\\e2studio_v2026-04.2_fsp_v6.5.0\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
         "compiler_version": "21.1.1",
         "core": "CPU1",
         "flags_sha256": "8D537FB11A698F7AB5B5C505F9E93265C169DEBEB784B8519C049D25C843111F",
@@ -71,7 +71,7 @@
         "source": "build.py"
       },
       "path": "CPU1/Build/build_profile.json",
-      "sha256": "A41BF51001F07103959B3C8EBB3B95231D2F4290E09FC9843ECDE952C165AF3D"
+      "sha256": "D414CC37ABB1F91781DFA52FC1B1CF65AAEC8FCB31336D231D8B8C006975364E"
     }
   },
   "checks": {
@@ -97,12 +97,12 @@
     "CPU0": {
       "bytes": 537,
       "path": "docs/demo_autofix_20260928_cpu0.log",
-      "sha256": "90B7DB78807B4B470710CCFBEC3AFB73754952A73F331CC0B26898EB869477FF"
+      "sha256": "437EAF3D6668491BAD01A12260582094FF02B3810820B6EF3E95748E9A5F2F4C"
     },
     "CPU1": {
       "bytes": 534,
       "path": "docs/demo_autofix_20260928_cpu1.log",
-      "sha256": "E1C0458038F4EA47E5D1C03047FB6B3F1011863198407460FFFF4449F5B95091"
+      "sha256": "9E1237DE4FAC41DF81B2F9F2893455EB85DD42BE5E8172EBD91EB9C8646ED5CC"
     }
   },
   "fsp": {
@@ -196,7 +196,7 @@
       "tree_sha256": "FA2D4D5BAEAEB559B7D9881FE3E732461A1ACE841479E0BA9351F4FB908D2BD7"
     },
     "CPU0/mtk3_bsp2": {
-      "tree_sha256": "5209045A34A111D3F5AE27D036685763BDB3CC870EF726558F6D5E230CB42A93"
+      "tree_sha256": "6E0A6B77349D189E801BDF67E2AF049B2B58B066CBBAFAECFF0AADABBF43554A"
     },
     "CPU0/ra": {
       "tree_sha256": "9638EECCBAC52219A7E9D082765E1436A37D604C6A0DC995268E77AA9F10A836"
@@ -300,7 +300,7 @@
       "tree_sha256": "6A9EB6E3D17E42DCD150B9E321CE94BFA08AD1E9B9D7E5624813EC08BBBD388A"
     },
     "M85Web/Application": {
-      "tree_sha256": "A575EF3FE6827E5101ACB67BBF41D7778C42E489970597A081433634C1B12602"
+      "tree_sha256": "F1CABC58E5410D17D625034045E7993B040955C407955C0A4098C41623CA2B6D"
     },
     "M85Web/Application/interface/controller_if.c": {
       "bytes": 3983,
@@ -327,11 +327,11 @@
       "sha256": "70B6D5E01D41D3D79732D3F5D237F42F97BED0F7D7A99E46C0DFB483C142CE94"
     },
     "control": {
-      "tree_sha256": "C418C0B48F9C881E31B9D07B65B2513B7D4DFC322C72ED5DFCE271DEA2FE1421"
+      "tree_sha256": "B250DA46F2859708522AF143DF4470E02EF4EAEABF914C4C2D6A2DD7BC6163AF"
     },
     "control/include/motor_build_profile.h": {
-      "bytes": 2540,
-      "sha256": "A6761AA2EDB59C3D6CBDA170C04DBE36040292D7B7850C50D1FE2F22D0847388"
+      "bytes": 2538,
+      "sha256": "47331B605B4DD6CC16AB2620BE7CCA2A8FFD228BB926821EDD3B5299FE983BB8"
     },
     "control/tests/test_web_adapter.c": {
       "bytes": 18214,
@@ -379,14 +379,14 @@
     }
   },
   "toolchain": {
-    "compiler": "C:\\Renesas\\e2_studio\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
+    "compiler": "C:\\Renesas\\RA\\e2studio_v2026-04.2_fsp_v6.5.0\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
     "cores": {
       "CPU0": {
-        "compiler": "C:\\Renesas\\e2_studio\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
+        "compiler": "C:\\Renesas\\RA\\e2studio_v2026-04.2_fsp_v6.5.0\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
         "version": "clang version 21.1.1"
       },
       "CPU1": {
-        "compiler": "C:\\Renesas\\e2_studio\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
+        "compiler": "C:\\Renesas\\RA\\e2studio_v2026-04.2_fsp_v6.5.0\\toolchains\\llvm_arm\\ATfE-21.1.1-Windows-x86_64\\bin\\clang.exe",
         "version": "clang version 21.1.1"
       }
     },
