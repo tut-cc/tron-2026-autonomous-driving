@@ -2,6 +2,8 @@
 
 本ドキュメントは、車載マイコン（CPU1: Cortex-M33 / CPU0: Cortex-M85）および Web UI（ブラウザ側 WebApp）のソースコードを解析し、状態遷移モデルを Mermaid 図として整理したものです。また、コード解析により判明したバグおよび仕様との不整合について詳述します。
 
+※ CPU0 と CPU1 間の詳細なリソース競合・排他制御（ハードウェアセマフォ、I2C RPC、共有メモリ調停）およびブートハンドシェイクの解析については、[CPU_CONCURRENCY_AND_STATE_TRANSITION.md](file:///C:/TRON/demo/docs/CPU_CONCURRENCY_AND_STATE_TRANSITION.md) を参照してください。
+
 ---
 
 ## 1. システム全体アーキテクチャと状態管理の分担
