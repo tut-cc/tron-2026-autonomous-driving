@@ -2,7 +2,6 @@ import { InputController } from './input.js';
 import { UIManager       } from './ui.js';
 import { CommManager     } from './comm.js';
 import { StateMachine    } from './state-machine.js';
-import { DebugManager    } from './debug-ui.js';
 import { installSelectionGuard, installLandscape, installZoomGuard } from './screen.js';
 
 export class Mini4WDApp {
@@ -11,7 +10,6 @@ export class Mini4WDApp {
 
         this.ui = new UIManager({
             onDriveModeClick:   () => this.stateMachine.requestDriveModeToggle(),
-            onStopClick:        () => this.stateMachine.requestAbortAction(),
             onTorTakeoverClick: () => this.stateMachine.requestTorTakeover()
         });
 
@@ -23,8 +21,6 @@ export class Mini4WDApp {
             onConnect:    ()              => this.stateMachine.handleConnect(),
             onDisconnect: ()              => this.stateMachine.handleDisconnect()
         });
-
-        this.debug = new DebugManager();
     }
 }
 

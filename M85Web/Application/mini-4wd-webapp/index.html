@@ -22,7 +22,7 @@
 
   <!-- HUD ヘッダー (状態 / 距離 / INFO) -->
   <header class="top-bar">
-    <div id="status-badge" class="badge" title="トリプルタップでレイアウト調整UI">
+    <div id="status-badge" class="badge">
       <span class="status-dot"></span>
       <span id="status-text">未接続</span>
     </div>
@@ -43,7 +43,7 @@
   <!-- 中断理由：モード切替の拒否理由（#alert-banner）と同じ画面上部中央に表示する -->
   <div id="stop-reason" role="status" aria-live="polite">中断理由: <span id="stop-reason-text">NONE</span></div>
 
-  <!-- 操作フッター (左右パッド / モード切替 / ABORT) -->
+  <!-- 操作フッター (左右パッド / モード切替) -->
   <footer class="bottom-bar">
     <div id="pad-steer" class="pad pad-steer" role="group" aria-label="左右（右手）">
       <button type="button" id="pad-left" class="pad-btn pad-left" data-dir="left" aria-label="左">
@@ -55,7 +55,6 @@
     </div>
     <div class="action-row">
       <button id="btn-mode" class="action-btn">MANUAL MODE</button>
-      <button id="btn-stop" class="action-btn btn-stop">ABORT</button>
     </div>
   </footer>
 
@@ -81,29 +80,13 @@
 
   <!-- INFO モーダル -->
   <div id="info-modal" popover class="modal-card">
-    <h2>操作・機能ガイド</h2>
+    <h2>操作ガイド</h2>
     <p class="muted">ミニ四駆コントローラー</p>
-    <section class="info-section" aria-labelledby="camera-info-heading">
-      <h3 id="camera-info-heading">カメラ診断・画像表示の凡例</h3>
-      <p id="camera-status" role="status" aria-live="off">カメラ映像を待っています</p>
-      <div id="ai-legend" aria-label="AI画像表示の凡例">
-        <span><i class="legend-road"></i>白: コース認識</span>
-        <span><i class="legend-course"></i>水色: コース境界</span>
-        <span><i class="legend-path"></i>黄: 生成走行路</span>
-        <span><i class="legend-wall"></i>茶: 非白色エリア</span>
-        <span><i class="legend-obstacle"></i>紫枠: AI物体検出（人・車）</span>
-        <span><i class="legend-blocked"></i>赤X: 走行路閉塞</span>
-      </div>
-    </section>
     <ul>
-      <li><strong>走行操作（ラジコン式）:</strong> 左手で前進ボタン（画面左下）、右手で ◀ / ▶（画面右）。同時に押すと曲がりながら進む。キーボードは ↑ / W で前進、← / → または A / D で左右</li>
-      <li><strong>自動運転:</strong> AUTO MODE ボタンで切替要求</li>
-      <li><strong>手動停止:</strong> ABORT ボタンで即時停止</li>
-      <li><strong>障害物:</strong> 人物・車を見つけると画面上部に表示し、左上にログを残します。ログを確認して必要なら手動に切り替えてください（検知による減速や自動モード切替は行いません）。ToF停止は独立して有効です</li>
-      <li><strong>壁:</strong> 距離センサーが 100 mm 以内を測ると停止します</li>
-      <li><strong>後退:</strong> 安全上、後退操作は提供していません</li>
-      <li><strong>UI調整デバッグ:</strong> <code>Ctrl+Shift+D</code> / <code>\`</code> / <code>F2</code> またはステータスバッジを3回タップ</li>
+      <li><strong>ラジコン操作:</strong> 左手で前進ボタン（画面左下）、右手で ◀ / ▶ ボタン（画面右下）。同時に押すと曲がりながら進みます（キーボード: ↑ / W で前進、← / → または A / D で左右）。</li>
+      <li><strong>MANUAL / AUTO モード切替:</strong> 画面下のモード切替ボタンで MANUAL MODE と AUTO MODE を切り替えます。</li>
     </ul>
+    <p id="camera-status" hidden></p>
   </div>
 
   <script type="module" src="js/video.js"></script>

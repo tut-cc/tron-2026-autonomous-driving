@@ -5,7 +5,6 @@
 スマホやPCのブラウザで `http://192.168.2.200/` を開きます。UI・`/api/control`・映像 `/video_feed`（BMPスナップショット 240×180、256色）はすべて車載M85から配信されます。詳細は `../README_HTTP.md` を参照してください。
 
 - ラジコン式：左手で前進ボタン（画面左下）、右手で ◀ / ▶（画面右）。同時に押すと曲がりながら進みます。キーボードは `↑` / `W` で前進、`←` / `→` または `A` / `D` で左右。後退入力は提供しません。
-- 停止ボタンは `ABORT` の1つだけです。中断画面では `RESET` になります。
 - 右上の「INFO」ボタンからいつでも操作説明を確認できます。
 
 ## 構成
@@ -21,7 +20,6 @@ mini-4wd-webapp/
 │   ├── ui.js             # 画面描画
 │   ├── video.js          # /video_feed の表示
 │   ├── screen.js         # スマホ向け画面制御（選択抑止・横画面）
-│   ├── debug-ui.js       # UI調整用デバッグパネル
 │   └── constants.js      # 状態名・理由文言・タイミング定数
 ├── tests/                # node --test tests/*.test.mjs
 ├── docs/                 # protocol.md / sequences.md / ui-spec.md
