@@ -56,6 +56,7 @@ static void publish_status(void)
     {
         web_adapter_status_to_response(&status, &response);
         response.tor_remaining_ms = web_adapter_tor_remaining_ms(&status, &g_tor_tracker);
+        web_adapter_obstacle_alarm(autonomy_controller_obstacle_alarm(), &response);
         (void) control_if_set_response(&response);
     }
 }

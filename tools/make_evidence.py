@@ -1,7 +1,9 @@
 """Regenerate the vehicle-output release evidence from a real clean build.
 
 Run on the Windows build PC from the package root (the same Python that
-e2 studio uses):  MAKE_EVIDENCE.cmd [--resume]  (= python -B tools/make_evidence.py)
+e2 studio uses): e2 studio External Tool "demo_make_evidence", or
+python -B tools/make_evidence.py [--resume].  This is the single pre-flash
+check (the former MAKE_EVIDENCE.cmd / CHECK_BEFORE_FLASH.cmd were removed).
 
 --resume skips step 2 only when both clean-build logs report EXIT_CODE=0 and
 their ELF/stamp hashes still match the files in CPU0/Build and CPU1/Build.

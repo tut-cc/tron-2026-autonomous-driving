@@ -457,17 +457,21 @@ bool control_json_encode(const control_response_t *s, char *data, size_t cap, si
 {
     if (!s || !data || !len || !cap || (unsigned)s->mode >= VEHICLE_STATE_COUNT ||
         (unsigned)s->stop_reason >= STOP_REASON_COUNT ||
-        (unsigned)s->request_reject_reason >= REQUEST_REJECT_COUNT)
+        (unsigned)s->request_reject_reason >= REQUEST_REJECT_COUNT ||
+        (unsigned)s->obstacle_kind >= OBSTACLE_KIND_COUNT)
         return false;
     int n = snprintf(data, cap,
                      "{\"mode\":\"%s\",\"front_distance_mm\":%" PRId32
                      ",\"armed\":%s,\"web_seq\":%" PRIu32
                      ",\"tor_active\":%s,\"tor_remaining_ms\":%" PRIu32
-                     ",\"stop_reason\":\"%s\",\"request_reject_reason\":\"%s\"}",
+                     ",\"stop_reason\":\"%s\",\"request_reject_reason\":\"%s\""
+                     ",\"obstacle_alarm\":%s,\"obstacle_kind\":\"%s\",\"alarm_seq\":%" PRIu32 "}",
                      control_modes[s->mode], s->front_distance_mm, s->armed ? "true" : "false",
                      s->web_seq, s->tor_active ? "true" : "false", s->tor_remaining_ms,
                      control_stops[s->stop_reason],
-                     control_rejects[s->request_reject_reason]);
+                     control_rejects[s->request_reject_reason],
+                     s->obstacle_alarm ? "true" : "false",
+                     control_obstacle_kinds[s->obstacle_kind], s->alarm_seq);
     if (n < 0 || (size_t)n >= cap || (size_t)n > CONTROL_JSON_LIMIT)
         return false;
     *len = (size_t)n;

@@ -2,13 +2,14 @@
 #include "control_runtime.h"
 #include "motor_output_drv8833.h"
 #include "motor_build_profile.h"
+#include "motor_pins_ra8p1.h"
 /* The supplied old BSP is M85-only. Do not mistake a successful M85
  * compile for a working M33 kernel. Enable validation only for compile tests. */
 #if BSP_CFG_CPU_CORE != 1 && !defined(CONTROL_SINGLE_CORE_VALIDATION)
 #error "Requires a ported M33 FSP + micro T-Kernel project (CPU1)"
 #endif
 static motor_output_drv8833_t driver;
-static const bsp_io_port_pin_t pins[4]={BSP_IO_PORT_00_PIN_06,BSP_IO_PORT_04_PIN_02,BSP_IO_PORT_04_PIN_12,BSP_IO_PORT_04_PIN_13};
+static const bsp_io_port_pin_t pins[4]=MOTOR_PINS_RA8P1;
 static unsigned levels,ready;
 /* Diagnostic (debugger): HIGH writes per pin while driving (not the all-HIGH brake). */
 volatile uint32_t g_motor_drive_high_writes[4];

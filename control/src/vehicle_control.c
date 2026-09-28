@@ -44,13 +44,13 @@ uint32_t vc_unsafe_reason(const vc_t *v, uint32_t now)
  * immediately; the vehicle never keeps driving on stale perception.  Only a
  * MANUAL request (take-over), STOP/ESTOP, a hazard, or the timeout leaves TOR,
  * and a recovered AI path does not resume AUTO by itself. */
-static void enter_tor(vc_t *v, uint32_t now)
+static void enter_tor(vc_t *v, uint32_t now, uint32_t reason)
 {
     v->status.armed = 0;
     v->left = v->right = 0;
     v->status.left_permille = v->status.right_permille = 0;
     v->status.state = VC_TOR;
-    v->status.reason = VC_TOR_REQUEST;   /* mode stays AUTO while waiting */
+    v->status.reason = reason;           /* mode stays AUTO while waiting */
     v->tor_ms = now;
 }
 
@@ -77,6 +77,8 @@ void vc_init(vc_t *v, uint32_t now)
     c.tof_timeout_ms = VC_TOF_FRESH_MS;
     c.tof_stop_mm = VC_TOF_STOP_MM;
     c.tof_release_mm = VC_TOF_CLEAR_MM;
+    c.obstacle_tor_mm = VC_OBSTACLE_TOR_MM;
+    c.steering_trim_initial = VC_STEERING_TRIM_INITIAL;
     control_motor_init(&v->path, &c, now);
     v->status.reason = VC_WAITING;
     v->status.mode = VC_MODE_MANUAL;   /* RC build: always boot in MANUAL */
@@ -131,18 +133,24 @@ bad:
     return why;
 }
 
-/* A missing, malformed or stale ToF sample is itself an emergency: the
- * front distance is unknown. */
+/* While driving (or waiting in TOR) a missing, malformed or stale ToF
+ * sample is an emergency: the front distance is unknown.  While stopped it is
+ * only recorded: tof_ok() already refuses any start, and latching EMERGENCY
+ * here made the Web UI flicker MANUAL <-> MANUAL_ABORT on every odd sample
+ * (sigma fail, open space) with nothing moving (2026-09-28). */
+static int tof_guarded(const vc_t *v)
+{ return v->status.armed || v->status.state == VC_TOR; }
 vc_input_result_t vc_tof(vc_t *v, const tof_safety_result_t *p, uint32_t now)
 {
     if (!p || p->valid > 1 || !fresh(now, p->sample_timestamp_ms, VC_TOF_FRESH_MS)) {
         v->in.tof.valid = 0; v->status.tof_valid = 0;
-        vc_stop(v, VC_TOF, 1);
+        if (tof_guarded(v)) vc_stop(v, VC_TOF, 1);
         return (p && p->valid <= 1) ? VC_INPUT_STALE : VC_INPUT_INVALID;
     }
     if (v->in.have_tof && !newer(p->seq, v->in.tof.seq)) return VC_INPUT_NOT_NEWER;
     v->in.tof = *p; v->in.have_tof = 1;
     v->status.tof_mm = p->distance_mm; v->status.tof_valid = p->valid;
+    if (!tof_guarded(v)) return VC_INPUT_ACCEPTED;
     if (!p->valid) vc_stop(v, VC_TOF, 1);
     else if (p->distance_mm <= VC_TOF_STOP_MM) vc_stop(v, VC_TOF_NEAR, 1);
     else if (p->distance_mm <= VC_TOF_PRESTOP_MM && v->status.armed)
@@ -193,7 +201,7 @@ vc_input_result_t vc_web(vc_t *v, const vc_web_t *w, uint32_t now)
     /* AUTO button: start autonomous driving (if ToF/link/AI path are OK).
      * MANUAL button (or any stop): back to MANUAL. */
     if (w->action == VC_WEB_MODE && w->mode != v->status.mode) {
-        vc_stop(v, VC_OPERATOR, 0);
+        vc_stop(v, VC_OK, 0);            /* a mode switch is not an abort */
         if (w->mode == VC_MODE_AUTO) {
             v->status.mode = VC_MODE_AUTO;
             vc_arm_result_t armed = vc_start(v, now);
@@ -218,14 +226,14 @@ vc_input_result_t vc_web(vc_t *v, const vc_web_t *w, uint32_t now)
         vc_reason_is_auto_refusal(v->status.reason)) {
         /* Consume a refusal when the UI has seen it and synchronized to MANUAL.
          * AUTO_PENDING polls keep client_mode=AUTO, so they cannot erase it. */
-        v->status.reason = VC_OPERATOR;
+        v->status.reason = VC_OK;
     }
     /* MANUAL: the vehicle drives only while a D-pad button is held. */
     if (v->status.mode == VC_MODE_MANUAL) {
         if (!v->status.armed && w->action == VC_WEB_DRIVE && w->deadman)
             (void)vc_start(v, now);
         else if (v->status.armed && !w->deadman)
-            vc_stop(v, VC_OPERATOR, 0);
+            vc_stop(v, VC_OK, 0);        /* D-pad released: normal idle, no stop cause */
     }
     return VC_INPUT_ACCEPTED;
 }
@@ -283,18 +291,23 @@ vc_arm_result_t vc_clear_emergency(vc_t *v, uint32_t now)
     if (result != VC_ARM_OK) return result;
     v->status.state = VC_STOPPED;
     v->status.armed = 0;
-    v->status.reason = VC_OPERATOR;
+    /* status.reason keeps the cause (e.g. VC_TOF_NEAR) so the operator still
+     * sees why the car stopped; the next start sets VC_OK. */
     v->left = v->right = 0;
     return VC_ARM_OK;
 }
 
 /* ---- periodic decision -------------------------------------------------- */
+volatile int32_t g_vc_steering_trim_permille;
 /* MANUAL wheel targets from the latest Web command.  Forward only: the rear is
- * unobserved, so reverse stays disabled pending rear safety validation. */
+ * unobserved, so reverse stays disabled pending rear safety validation.  The
+ * wheel-balance trim learned in AUTO is applied while moving forward, so ▲
+ * alone also drives straight. */
 static void manual_targets(const vc_t *v, float *l, float *r)
 {
     float forward = v->in.web.linear > 0 ? VC_MANUAL_MAX_FORWARD * v->in.web.linear / (float)VC_PERMILLE_MAX : 0;
-    float turn = VC_MANUAL_MAX_STEERING * v->in.web.steering / (float)VC_PERMILLE_MAX;
+    float turn = VC_MANUAL_MAX_STEERING * v->in.web.steering / (float)VC_PERMILLE_MAX +
+                 (forward > 0 ? v->path.steering_trim : 0);
     *l = limit_command(forward + turn);
     *r = limit_command(forward - turn);
     if (*l < 0) *l = 0;
@@ -314,13 +327,15 @@ void vc_step(vc_t *v, uint32_t now, control_motor_output_t *out)
     v->status.control_ms = now;
     if (gap > v->status.control_max_gap_ms) v->status.control_max_gap_ms = gap;
 
+    v->path.trim_learning = (uint8_t)(v->status.armed && v->status.state == VC_AUTO);
     control_motor_update(&v->path, v->in.have_ai ? &v->in.ai : 0, v->in.have_tof ? &v->in.tof : 0, now, &p);
+    g_vc_steering_trim_permille = (int32_t)(VC_PERMILLE_MAX * v->path.steering_trim);
 
+    /* ToF (wall) and link are stops in every mode.  A person/car is not: in
+     * AUTO it becomes a TOR below (VC_TOR_OBSTACLE); MANUAL is the driver's. */
     unsafe = vc_unsafe_reason(v, now);
     if (v->status.armed && unsafe != VC_OK)
         vc_stop(v, unsafe, unsafe != VC_TOF_PRESTOP);
-    else if (v->status.armed && p.reason == CONTROL_REASON_OBSTACLE_IN_CORRIDOR)
-        vc_stop(v, VC_AI_OBSTACLE, 1);
     /* Sensor/link/AI emergencies clear themselves once the cause is gone (ToF
      * beyond VC_TOF_CLEAR_MM, link fresh, AI path healthy again).  ESTOP and
      * internal faults stay latched.  Driving again still needs a new D-pad
@@ -339,9 +354,11 @@ void vc_step(vc_t *v, uint32_t now, control_motor_output_t *out)
     }
 
     if (v->status.armed && v->status.mode == VC_MODE_AUTO) {
-        /* AUTO ignores the phone: ToF / M85 link / AI obstacle are emergencies
-         * (above); a path the follower can no longer drive is a TOR. */
-        if (!p.motor_enable) enter_tor(v, now);
+        /* AUTO ignores the phone: ToF / M85 link are stops (above); a close
+         * person/car or a path the follower can no longer drive is a TOR. */
+        if (!p.motor_enable)
+            enter_tor(v, now, p.reason == CONTROL_REASON_OBSTACLE_IN_CORRIDOR ?
+                              VC_TOR_OBSTACLE : VC_TOR_REQUEST);
         else { l = p.left_command; r = p.right_command; }
     } else if (v->status.armed) {
         /* MANUAL fail-safe: lost phone link must not keep the last command. */

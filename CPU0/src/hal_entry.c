@@ -11,6 +11,7 @@
 #include "mipi_csi.h"
 #include "dualcore_board.h"
 #include "autonomy_controller.h"
+#include "motor_pins_ra8p1.h"
 
 /* µT-Kernel owns CPU0 SysTick/PendSV/SVC and creates usermain's tasks. */
 void knl_start_mtkernel(void);
@@ -58,6 +59,21 @@ void R_BSP_WarmStart(bsp_warm_start_event_t event)
     if (BSP_WARM_START_POST_C == event)
     {
         /* C runtime environment and system clocks are setup. */
+
+        /* Motor inputs LOW first (2026-09-28): until CPU1 runs its own pin
+         * setup they would float, and a pulled-up line (PMOD1 pin 8 is the
+         * Pmod RESET line) made a motor twitch at power-on/reset.  CPU0 never
+         * touches these pins again; CPU1 re-applies the same LOW level. */
+        {
+            static const bsp_io_port_pin_t motor_pins[] = MOTOR_PINS_RA8P1;
+            R_BSP_PinAccessEnable();
+            for (uint32_t i = 0U; i < sizeof(motor_pins) / sizeof(motor_pins[0]); i++)
+            {
+                R_BSP_PinCfg(motor_pins[i], (uint32_t) IOPORT_CFG_PORT_DIRECTION_OUTPUT |
+                                            (uint32_t) IOPORT_CFG_PORT_OUTPUT_LOW);
+            }
+            R_BSP_PinAccessDisable();
+        }
 
         /* Configure pins. */
         R_IOPORT_Open (&IOPORT_CFG_CTRL, &IOPORT_CFG_NAME);

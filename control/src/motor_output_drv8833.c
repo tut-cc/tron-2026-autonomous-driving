@@ -19,6 +19,7 @@ void motor_output_drv8833_disarm(motor_output_drv8833_t *d, motor_stop_action_t 
     if (d == NULL || !d->ready) return;
     d->armed = 0U;
     d->command[0] = d->command[1] = 0;
+    d->duty[0] = d->duty[1] = d->carry[0] = d->carry[1] = 0U;
     d->brake = (a == MOTOR_STOP_BRAKE);
     pins(d, d->brake, d->brake, d->brake, d->brake);
 }
@@ -27,6 +28,7 @@ int motor_output_drv8833_arm(motor_output_drv8833_t *d)
 {
     if (d == NULL || !d->ready || d->fault) return -1;
     d->command[0] = d->command[1] = 0;
+    d->duty[0] = d->duty[1] = d->carry[0] = d->carry[1] = 0U;
     d->age_ticks = 0U;
     d->brake = 0U;
     pins(d, 0U, 0U, 0U, 0U);
@@ -37,8 +39,9 @@ int motor_output_drv8833_arm(motor_output_drv8833_t *d)
 
 static int to_slots(float v, float scale)
 {
-    /* Truncation ensures actual duty never exceeds the configured cap. */
-    return (int)(v * scale * (float)MOTOR_PWM_SLOTS);
+    /* Fixed point (1/256 slot).  Truncation keeps the average duty at or
+     * below the configured cap. */
+    return (int)(v * scale * (float)(MOTOR_PWM_SLOTS << MOTOR_DUTY_FRACTION_BITS));
 }
 
 int motor_output_drv8833_apply(motor_output_drv8833_t *d, const control_motor_output_t *o)
@@ -89,8 +92,13 @@ static void wheel(motor_output_drv8833_t *d, unsigned i, unsigned *a, unsigned *
 {
     int q = d->command[i];
     int direction = (q > 0) - (q < 0);
-    unsigned duty = (unsigned)(q < 0 ? -q : q);
     *a = *b = 0U;
+    if (d->phase == 0U) {
+        /* New period: whole slots of (command + carried fraction). */
+        unsigned want = (unsigned)(q < 0 ? -q : q) + d->carry[i];
+        d->duty[i] = want >> MOTOR_DUTY_FRACTION_BITS;
+        d->carry[i] = want & ((1U << MOTOR_DUTY_FRACTION_BITS) - 1U);
+    }
     if (direction == 0 || (d->last_direction[i] != 0 &&
         direction != d->last_direction[i] && d->idle_ticks[i] < MOTOR_REVERSE_TICKS)) {
         if (d->idle_ticks[i] < MOTOR_REVERSE_TICKS) ++d->idle_ticks[i];
@@ -98,7 +106,7 @@ static void wheel(motor_output_drv8833_t *d, unsigned i, unsigned *a, unsigned *
     }
     d->last_direction[i] = direction;
     d->idle_ticks[i] = 0U;
-    if (d->phase < duty) {
+    if (d->phase < d->duty[i]) {
         if (direction > 0) *a = 1U;
         else *b = 1U;
     }

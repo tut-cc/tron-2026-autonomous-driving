@@ -1,4 +1,4 @@
-# Build outputs: regenerate with `MAKE_EVIDENCE.cmd` (or tools/build.py).
+# Build outputs: regenerate with tools/make_evidence.py (or tools/build.py).
 # Build/*.lld and Build/bsp_linker_info.h are linker inputs and ARE tracked.
 /CPU0/Build/obj/
 /CPU1/Build/obj/

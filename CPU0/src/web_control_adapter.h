@@ -30,4 +30,12 @@ void web_adapter_status_to_response(const vc_status_t *status, control_response_
 typedef struct { bool in_tor; uint32_t tor_since_ms; } web_tor_tracker_t;
 uint32_t web_adapter_tor_remaining_ms(const vc_status_t *status, web_tor_tracker_t *tracker);
 
+/* Person/car alarm word published by the M85 camera task
+ * (autonomy_controller_obstacle_alarm()), copied into the response. */
+#define AUTONOMY_ALARM_ACTIVE     (1U << 0)  /* person/car in the corridor now */
+#define AUTONOMY_ALARM_PERSON     (1U << 1)
+#define AUTONOMY_ALARM_CAR        (1U << 2)
+#define AUTONOMY_ALARM_SEQ_SHIFT  (8U)       /* bits 8..31: new-alarm counter  */
+void web_adapter_obstacle_alarm(uint32_t word, control_response_t *response);
+
 #endif

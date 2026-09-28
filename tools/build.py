@@ -131,7 +131,7 @@ for core in (['CPU0','CPU1'] if args.core=='all' else [args.core]):
  print(core,'OK',flush=True)
 if args.core == 'all':
  logs=(ROOT/f'docs/{EVIDENCE_TAG}_cpu0.log',ROOT/f'docs/{EVIDENCE_TAG}_cpu1.log')
- if all(path.exists() for path in logs):
-  subprocess.run([str(os.environ.get('PYTHON', 'python')), str(ROOT/'tools/manifest.py'), '--profile', args.profile], cwd=ROOT, check=True)
- else:
-  print('BUILD COMPLETE; run tools/manifest.py after creating fresh CPU0/CPU1 evidence logs',flush=True)
+ # Build only (e2 studio build button).  Evidence, manifest, tests and verify
+ # are one step: tools/make_evidence.py (e2 studio External Tool
+ # "demo_make_evidence") before a release flash (2026-09-28).
+ print('BUILD COMPLETE; before a release flash run tools/make_evidence.py (External Tool demo_make_evidence)',flush=True)

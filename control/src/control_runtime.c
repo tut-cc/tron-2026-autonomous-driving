@@ -217,8 +217,10 @@ static void distance_task(INT n, void *x)
         int rc = cfg.tof_poll(&t, now);          /* 0 new, 1 not ready, <0 error */
         if (!lock_state()) { fail_safe(CONTROL_FAULT_LOCK); break; }
         if (rc < 0) {
-            (void)vc_tof(&vehicle, 0, now);      /* invalidates the reading, EMERGENCY/VC_TOF */
-            stop_locked(VC_TOF, 1);              /* also bumps generation and stops the output */
+            /* Invalidates the reading; EMERGENCY/VC_TOF only while driving or in TOR. */
+            (void)vc_tof(&vehicle, 0, now);
+            ++generation;
+            control_hw_stop();
         } else if (rc == 0) {
             uint32_t was_armed = vehicle.status.armed;
             (void)vc_tof(&vehicle, &t, now);

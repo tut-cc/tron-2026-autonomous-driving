@@ -11,13 +11,14 @@
 
 ## ビルドと書き込み前チェック
 
-ルートで実行します。どちらも基板には書き込みません。
+手順は2つだけです（2026-09-28 に整理。旧 `MAKE_EVIDENCE.cmd` / `CHECK_BEFORE_FLASH.cmd` は削除）。どちらも基板には書き込みません。
 
-```text
-MAKE_EVIDENCE.cmd        両コアのクリーンビルド → MANIFEST → PC テスト（C / JS）→ 検証
-                         （--resume でビルドを再利用。ログと MANIFEST.json は docs\ に出る）
-CHECK_BEFORE_FLASH.cmd   書き込み前の最終チェック。最後に「PASS: vehicle-output build and verification」
-```
+| いつ | e² studio での操作 | 中身 |
+|---|---|---|
+| 開発中 | ビルドボタン | `tools/build.py --core all`（ビルドだけ） |
+| 本番の書き込み前 | 実行 → 外部ツール → `demo_make_evidence` | `tools/make_evidence.py`：両コアのクリーンビルド → MANIFEST → PC テスト（C / JS）→ 検証。ログと MANIFEST.json は `docs\`（`--resume` でビルドを再利用） |
+
+外部ツール `demo_manifest_verify` は `demo_make_evidence` の一部（MANIFEST と検証だけ）なので使いません。
 
 中身は `tools/` の Python スクリプトです。
 
@@ -27,7 +28,7 @@ CHECK_BEFORE_FLASH.cmd   書き込み前の最終チェック。最後に「PASS
 | `tools/test_host.py` | 制御・IPC・モータードライバ・Web アダプタ・AI 前後処理の C テスト（PC 上） |
 | `tools/manifest.py` | 成果物・入力のハッシュを `docs/MANIFEST.json` に記録 |
 | `tools/verify.py` | ELF/map の配置、Flash 分割、共有 RAM、ピン所有、両コアのプロファイル一致、Web UI の埋め込み内容などを検査 |
-| `tools/make_evidence.py` | 上の4つを順に実行し、当日のログを `docs/` に残す（`MAKE_EVIDENCE.cmd` の中身） |
+| `tools/make_evidence.py` | 上の4つを順に実行し、当日のログを `docs/` に残す（外部ツール `demo_make_evidence` の中身） |
 | `tools/evidence_tag.json` | ログ名に使う証拠タグと日付（`make_evidence.py` が自動更新） |
 
 ヘッダを変えると両コアとも全再ビルドになります（CPU0 は 12〜20 分）。
@@ -53,9 +54,9 @@ python -B tools/verify.py --profile dry-run
 ## 書き込み
 
 1. **必ずモーター電源（DRV8833 VM）を外し、車輪を浮かせる。**
-2. `CHECK_BEFORE_FLASH.cmd` が PASS していることを確認する。
+2. 本番の書き込みなら、外部ツール `demo_make_evidence` が PASS していることを確認する（開発中の試し書きでは省略可）。
 3. Run → Debug Configurations → `ra8p1_vision_BothCore_Download` だけを使う（CPU0/CPU1 の ELF を1回で書き込む）。CPU1 単独の Download/Run は使わない（M33 は M85 が起動する）。
-4. ブレークポイントは設定していないので、書き込み完了と同時にファームが動き出す。起動構成は ELF をワークスペース相対（`${workspace_loc:/ra8p1_vision_CPU0}` / `..._CPU1`）で指定し、起動前の自動ビルドは無効（検証済みの ELF をそのまま書く）。
+4. 書き込みが終わると CPU0 が Reset_Handler で止まるので F8 で再開し、「実行 → 切断」でデバッガを外す（接続したままだと CPU1 が止まることがある。原因は調査中）。起動構成は ELF をワークスペース相対（`${workspace_loc:/ra8p1_vision_CPU0}` / `..._CPU1`）で指定し、起動前の自動ビルドは無効（検証済みの ELF をそのまま書く）。
 5. 書き込み後はブラウザのタブを開き直す（古い UI を使わない）。
 
 ## デバッガで見る変数

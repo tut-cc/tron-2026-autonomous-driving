@@ -18,7 +18,7 @@ int main(void)
 {
     control_request_t r;
     control_response_t s = {VEHICLE_AUTO_ABORT, 150, true, 0U, STOP_REASON_OBSTACLE,
-                            REQUEST_REJECT_NONE, true, 42U};
+                            REQUEST_REJECT_NONE, true, 42U, true, OBSTACLE_KIND_PERSON, 7U};
     char out[CONTROL_JSON_LIMIT];
     size_t n;
 
@@ -50,15 +50,20 @@ int main(void)
     assert(strcmp(control_stop_reason_name(STOP_REASON_AI_OBSTACLE), "AI_OBSTACLE") == 0);
     assert(strcmp(control_stop_reason_name(STOP_REASON_DISTANCE_PRESTOP), "DISTANCE_PRESTOP") == 0);
     assert(strcmp(control_stop_reason_name(STOP_REASON_ROAD_UNAVAILABLE), "ROAD_UNAVAILABLE") == 0);
+    assert(strcmp(control_stop_reason_name(STOP_REASON_INTERNAL_FAULT), "INTERNAL_FAULT") == 0);
 
     assert(control_json_encode(&s, out, sizeof(out), &n));
     assert(n == strlen(out));
     assert(strcmp(out, "{\"mode\":\"AUTO_ABORT\",\"front_distance_mm\":150,\"armed\":true,"
                        "\"web_seq\":42,\"tor_active\":true,\"tor_remaining_ms\":0,"
                        "\"stop_reason\":\"OBSTACLE\","
-                       "\"request_reject_reason\":\"NONE\"}") == 0);
+                       "\"request_reject_reason\":\"NONE\","
+                       "\"obstacle_alarm\":true,\"obstacle_kind\":\"PERSON\",\"alarm_seq\":7}") == 0);
     s.stop_reason = STOP_REASON_COUNT; /* out-of-range enum must not index the table */
     assert(!control_json_encode(&s, out, sizeof(out), &n));
-    puts("PASS web protocol: JSON decode required/duplicate/unknown keys and enums, encode wire names and bounds");
+    s.stop_reason = STOP_REASON_NONE;
+    s.obstacle_kind = OBSTACLE_KIND_COUNT;
+    assert(!control_json_encode(&s, out, sizeof(out), &n));
+    puts("PASS web protocol: JSON decode required/duplicate/unknown keys and enums, encode wire names and bounds, obstacle alarm fields");
     return 0;
 }

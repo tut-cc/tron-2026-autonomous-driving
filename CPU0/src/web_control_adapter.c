@@ -119,7 +119,8 @@ static stop_reason_t response_stop_reason(const vc_status_t *status)
     case VC_TOF_NEAR:    return STOP_REASON_DISTANCE_EMERGENCY;
     case VC_TOF_PRESTOP: return STOP_REASON_DISTANCE_PRESTOP;
     case VC_ESTOP:       return STOP_REASON_BUTTON_EMERGENCY;
-    case VC_AI_OBSTACLE: return STOP_REASON_AI_OBSTACLE;
+    case VC_AI_OBSTACLE:
+    case VC_TOR_OBSTACLE: return STOP_REASON_AI_OBSTACLE; /* TOR: close person/car */
     case VC_OPERATOR: return STOP_REASON_MANUAL_ABORT_BUTTON;
     case VC_LINK:     /* M85 heartbeat to M33 lost */
     case VC_WEB:      return STOP_REASON_COMM_TIMEOUT; /* Web command stale/invalid */
@@ -127,8 +128,22 @@ static stop_reason_t response_stop_reason(const vc_status_t *status)
     case VC_AI:       return STOP_REASON_ROAD_UNAVAILABLE; /* bad/stale AI frame in AUTO */
     case VC_TOR_TIMEOUT: return STOP_REASON_TOR_TIMEOUT;
     case VC_TOR_REQUEST: return STOP_REASON_NONE; /* tor_active carries it */
+    case VC_INTERNAL:    return STOP_REASON_INTERNAL_FAULT; /* latched until board reset */
     default:          return STOP_REASON_NONE;
     }
+}
+
+void web_adapter_obstacle_alarm(uint32_t word, control_response_t *response)
+{
+    if (!response) return;
+    bool person = (word & AUTONOMY_ALARM_PERSON) != 0U;
+    bool car = (word & AUTONOMY_ALARM_CAR) != 0U;
+    response->obstacle_alarm = (word & AUTONOMY_ALARM_ACTIVE) != 0U;
+    response->obstacle_kind = !response->obstacle_alarm ? OBSTACLE_KIND_NONE :
+                              (person && car) ? OBSTACLE_KIND_PERSON_AND_CAR :
+                              person ? OBSTACLE_KIND_PERSON :
+                              car ? OBSTACLE_KIND_CAR : OBSTACLE_KIND_NONE;
+    response->alarm_seq = word >> AUTONOMY_ALARM_SEQ_SHIFT;
 }
 
 uint32_t web_adapter_tor_remaining_ms(const vc_status_t *status, web_tor_tracker_t *tracker)

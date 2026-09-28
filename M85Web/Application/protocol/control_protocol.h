@@ -34,11 +34,21 @@ typedef enum
     STOP_REASON_SENSOR_ERROR,
     STOP_REASON_DISTANCE_EMERGENCY, /* ToF <= emergency distance (50 mm)      */
     STOP_REASON_BUTTON_EMERGENCY,   /* Web ESTOP (latched until board reset)  */
-    STOP_REASON_AI_OBSTACLE,        /* AI person/car in the driving corridor  */
+    STOP_REASON_AI_OBSTACLE,        /* person/car close ahead: TOR (AUTO)     */
     STOP_REASON_DISTANCE_PRESTOP,   /* ToF <= ordinary stop distance (100 mm) */
     STOP_REASON_ROAD_UNAVAILABLE,   /* AI frame invalid/stale in AUTO         */
+    STOP_REASON_INTERNAL_FAULT,     /* M33 driver/kernel fault: board reset   */
     STOP_REASON_COUNT
 } stop_reason_t;
+/* Person/car alarm raised by the M85 camera (independent of the drive mode). */
+typedef enum
+{
+    OBSTACLE_KIND_NONE,
+    OBSTACLE_KIND_PERSON,
+    OBSTACLE_KIND_CAR,
+    OBSTACLE_KIND_PERSON_AND_CAR,
+    OBSTACLE_KIND_COUNT
+} obstacle_kind_t;
 typedef enum
 {
     REQUEST_REJECT_NONE,
@@ -73,6 +83,9 @@ typedef struct
     request_reject_reason_t request_reject_reason;
     bool armed;                  /* M33 motor authorization state              */
     uint32_t web_seq;             /* latest M33-accepted web sequence           */
+    bool obstacle_alarm;          /* person/car in the corridor right now       */
+    obstacle_kind_t obstacle_kind;
+    uint32_t alarm_seq;           /* +1 on every new alarm (one log line each)  */
 } control_response_t;
 
 /* Wire-name tables for JSON and debug logs, indexed by the enum value. */
@@ -80,6 +93,7 @@ extern const char *const control_modes[VEHICLE_STATE_COUNT];
 extern const char *const control_requests[MODE_REQUEST_COUNT];
 extern const char *const control_stops[STOP_REASON_COUNT];
 extern const char *const control_rejects[REQUEST_REJECT_COUNT];
+extern const char *const control_obstacle_kinds[OBSTACLE_KIND_COUNT];
 /* Bounds-checked lookups; out-of-range values return "UNKNOWN". */
 const char *control_vehicle_state_name(vehicle_state_t value);
 const char *control_mode_request_name(mode_request_t value);

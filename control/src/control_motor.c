@@ -96,10 +96,18 @@ void control_motor_default_config(control_motor_config_t * config)
     config->curve_slowdown = 0.40F;
     config->max_steering = 0.35F;
 
-    config->obstacle_confidence_stop = 0.65F;
-    config->obstacle_overlap_stop = 0.40F;
-    config->obstacle_bottom_stop = 0.72F;
+    config->obstacle_confidence_min = (float) AI_OBSTACLE_CONFIDENCE_MIN_PER_MILLE / 1000.0F;
+    config->obstacle_overlap_min = (float) AI_OBSTACLE_OVERLAP_MIN_PER_MILLE / 1000.0F;
+    config->obstacle_bottom_tor = 0.95F;
+    config->obstacle_tor_mm = 250U;
     config->obstacle_slowdown_gain = 0.65F;
+
+    /* ~7 camera frames (2-3 s) to learn a constant imbalance; at most
+     * 0.10 of wheel command, well inside max_steering. */
+    config->steering_trim_initial = 0.0F;
+    config->steering_trim_rate = 0.15F;
+    config->steering_trim_limit = 0.10F;
+    config->steering_trim_heading_gate = 0.30F;
 
     config->good_frames_to_auto = 2U;
     config->allow_reverse = 0U;
@@ -137,6 +145,11 @@ void control_motor_init(control_motor_t * controller,
     {
         controller->config.tof_release_mm = controller->config.tof_stop_mm;
     }
+    controller->config.steering_trim_limit =
+        clampf_local(controller->config.steering_trim_limit, 0.0F, controller->config.max_steering);
+    controller->steering_trim = clampf_local(controller->config.steering_trim_initial,
+                                             -controller->config.steering_trim_limit,
+                                             controller->config.steering_trim_limit);
 }
 
 void control_motor_update(control_motor_t * controller,
@@ -148,7 +161,7 @@ void control_motor_update(control_motor_t * controller,
     uint8_t i;
     uint8_t path_values_valid;
     uint8_t new_ai_frame = 0U;
-    uint8_t hard_obstacle = 0U;
+    uint8_t near_obstacle = 0U;
     float maximum_obstacle_risk = 0.0F;
     float confidence_scale;
     float obstacle_scale;
@@ -299,18 +312,22 @@ void control_motor_update(control_motor_t * controller,
             maximum_obstacle_risk = risk;
         }
 
-        if ((obstacle->confidence >= controller->config.obstacle_confidence_stop) &&
-            (obstacle->corridor_overlap >= controller->config.obstacle_overlap_stop) &&
-            (obstacle->bbox_bottom >= controller->config.obstacle_bottom_stop))
+        /* A person/car in the corridor only slows the car down (risk above)
+         * until it is close: ToF within obstacle_tor_mm, or the box already
+         * at the bottom of the image (an object below the ToF beam). */
+        if ((obstacle->confidence >= controller->config.obstacle_confidence_min) &&
+            (obstacle->corridor_overlap >= controller->config.obstacle_overlap_min) &&
+            ((tof->distance_mm <= controller->config.obstacle_tor_mm) ||
+             (obstacle->bbox_bottom >= controller->config.obstacle_bottom_tor)))
         {
-            hard_obstacle = 1U;
+            near_obstacle = 1U;
         }
     }
 
-    if (0U != hard_obstacle)
+    if (0U != near_obstacle)
     {
         set_stopped_output(controller, perception, tof,
-                           CONTROL_STATE_SAFE_STOP,
+                           CONTROL_STATE_TOR,
                            CONTROL_REASON_OBSTACLE_IN_CORRIDOR,
                            MOTOR_STOP_BRAKE,
                            output);
@@ -395,6 +412,22 @@ void control_motor_update(control_motor_t * controller,
     obstacle_scale = clampf_local(obstacle_scale, 0.20F, 1.0F);
 
     speed_command = controller->config.base_command * confidence_scale * obstacle_scale;
+    if ((0U != controller->trim_learning) &&
+        ((0U == controller->steering_valid) || (perception->seq != controller->steering_ai_seq)) &&
+        (perception->heading_error <= controller->config.steering_trim_heading_gate) &&
+        (perception->heading_error >= -controller->config.steering_trim_heading_gate))
+    {
+        /* Integral of the raw (no deadband) error, once per new frame.  A
+         * constant motor imbalance leaves the car sitting just outside the
+         * deadband on one side; this term moves that correction into the
+         * trim so the error returns to zero instead of weaving. */
+        float raw = (controller->config.lateral_gain * perception->lateral_error) +
+                    (controller->config.heading_gain * perception->heading_error);
+        controller->steering_trim = clampf_local(
+            controller->steering_trim + (controller->config.steering_trim_rate * raw),
+            -controller->config.steering_trim_limit,
+            controller->config.steering_trim_limit);
+    }
     steering_command =
         (controller->config.lateral_gain *
          deadband_local(perception->lateral_error, controller->config.lateral_deadband)) +
@@ -414,7 +447,9 @@ void control_motor_update(control_motor_t * controller,
         controller->steering_valid = 1U;
         controller->steering_ai_seq = perception->seq;
     }
-    steering_command = controller->steering_filtered;
+    steering_command = clampf_local(controller->steering_filtered + controller->steering_trim,
+                                    -controller->config.max_steering,
+                                    controller->config.max_steering);
     if (controller->config.max_steering > 0.0F)
     {
         float turn = steering_command < 0.0F ? -steering_command : steering_command;

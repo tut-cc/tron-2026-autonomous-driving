@@ -44,6 +44,15 @@ extern "C" {
 #define AI_FRAME_MAX_AGE_MS                (600U)
 
 /*
+ * Person/car obstacle in the driving corridor (2026-09-28 demo layout).
+ * The M85 raises an alarm to the Web UI for every detection that meets both
+ * limits; the M33 asks the driver to take over (TOR) when such an obstacle is
+ * also within VC_OBSTACLE_TOR_MM on the ToF.  One definition for both cores.
+ */
+#define AI_OBSTACLE_CONFIDENCE_MIN_PER_MILLE (650U) /* detection score        */
+#define AI_OBSTACLE_OVERLAP_MIN_PER_MILLE    (400U) /* share inside corridor  */
+
+/*
  * AI/image-processing output contract.
  *
  * All normalized float values must be finite.  The producer must clamp them

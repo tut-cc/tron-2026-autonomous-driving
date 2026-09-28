@@ -2,6 +2,37 @@
 
 新しい記録ほど上の「現状」に追記しています。本文中の古いファイル名（`STATUS_20260927_JA.md` など）は当時の名前です（4m 参照）。
 
+## 2026-09-28 ビルド・検証の手順を2つに整理
+- 開発中：e² studio のビルドボタン（`build.py` はビルドだけ。以前は証拠ログがあると `manifest.py` を呼び、ソースを変えるたびに失敗していた）。
+- 本番の書き込み前：外部ツール `demo_make_evidence`（`tools/make_evidence.py`）。
+- 内容が重複していた `MAKE_EVIDENCE.cmd`・`CHECK_BEFORE_FLASH.cmd` を削除（`manifest.py` の入力一覧からも外した）。外部ツール `demo_manifest_verify` は使わない。
+
+## 2026-09-28 Web のモードが頻繁に切り替わる件・停止理由の修正（ソース反映済み・未書き込み）
+| 内容 | 主なファイル |
+|---|---|
+| 原因：止まっている間も ToF の無効値（sigma fail、何もない空間など）1回で EMERGENCY/VC_TOF になり、次の有効値で自動解除されていた。Web では MANUAL ⇔ MANUAL_ABORT が測定周期（約60 ms）で入れ替わっていた。停止中は記録だけにし、EMERGENCY は走行中と TOR 中だけにした（開始は従来どおり `tof_ok()` が拒否） | `control/src/vehicle_control.c`, `control/src/control_runtime.c` |
+| 停止理由：パッドを離す・モード切替・TOR 引継ぎ・AUTO 拒否のあとが「手動中断」になっていた → `NONE`。ABORT/RESET だけが `MANUAL_ABORT_BUTTON`（表示「ABORT で停止」） | `vehicle_control.c`, `js/constants.js` |
+| 停止理由：緊急停止の自動解除で原因が「手動中断」に上書きされていた → 次に走り出すまで元の原因（例：前方50 mm）を残す | `vehicle_control.c` |
+| 停止理由：内部異常（`VC_INTERNAL`）が何も表示されなかった → `INTERNAL_FAULT`「内部異常で停止（基板リセットが必要）」を追加 | `web_control_adapter.c`, `protocol/*`, `js/constants.js` |
+
+- e2 studio の `BothCore_Download` でデバッグ中は CPU1 が止まり（I2C 送信の途中で停止）、CPU0 は CPU1 を 10 秒待ってカーネルを終了した。デバッガ接続中の値は通常走行の観察に使えない。
+
+## 2026-09-28 デモ構成変更・蛇行・起動時の微動（ソース反映済み・未書き込み）
+段ボール壁をやめ、白いコース上で「壁＝ToFで停止」「人・車＝アラーム、近づいたらTOR」の構成にした。
+
+| 内容 | 主なファイル |
+|---|---|
+| 人・車（信頼度0.65以上・走行路との重なり0.40以上）は停止ではなくアラーム。M85がWeb応答に `obstacle_alarm` / `obstacle_kind` / `alarm_seq` を載せ、UIはバッジと時刻付きログ（最大5件）を表示 | `CPU0/src/autonomy_controller.c`, `web_control_adapter.c`, `m85_gateway_task.c`, `M85Web/Application/protocol/*`, `mini-4wd-webapp/js/ui.js`, `index.html`, `style.css` |
+| AUTO中、その人・車が ToF 250 mm 以内（`VC_OBSTACLE_TOR_MM`）または画像の最下部（0.95、ToFの下の低い物用）に来たら TOR（理由 `VC_TOR_OBSTACLE`、Webは `AI_OBSTACLE`）。以前は画像下55%で即EMERGENCYだった。MANUALでは止めない | `control/src/control_motor.c`, `vehicle_control.c`, `control/include/*` |
+| M85の「AI_OBJECT_AHEAD で画像最下部の仮想障害物を足す」処理を削除（実際の検出位置で判定するため） | `CPU0/src/autonomy_controller.c` |
+| 判定のしきい値を両コア共通に（`AI_OBSTACLE_CONFIDENCE_MIN_PER_MILLE` 650 / `AI_OBSTACLE_OVERLAP_MIN_PER_MILLE` 400） | `control/include/ai_control_signals.h` |
+| 蛇行対策1：左右モーター差の自動補正。AUTOでまっすぐな区間を走る間、生のずれ（不感帯なし）を1フレームごとに15%ずつ積算してトリムを学習（上限±0.10）。電源を切るまで保持し、MANUALの前進にも適用。値はデバッガで `g_vc_steering_trim_permille` | `control_motor.c/.h`, `vehicle_control.c/.h` |
+| 蛇行対策2：PWMを 1/256 スロット精度に（周期ごとに端数を持ち越す）。従来は5%刻みで、小さな操舵補正が切り捨てられていた | `control/src/motor_output_drv8833.c/.h` |
+| 起動時の微動：CPU0 が起動直後（`R_BSP_WarmStart` POST_C）にモーター4ピンを LOW 出力にする。CPU1 が起動するまでピンが浮き、PMOD1-8（P402、Pmod の RESET 線）などが High 側に振れていたと推定 | `CPU0/src/hal_entry.c`, `control/include/motor_pins_ra8p1.h`, `control/ports/control_hw_ra8p1.c` |
+
+- CPU0・CPU1とも再ビルド・書き込みが必要（IPCの形式は不変）。
+- 実機未確認：250 mm でのTOR、トリム学習の収束、起動時の微動が消えるか。
+
 ## 2026-09-28 Webアプリ整理（ソース反映済み・未書き込み）
 | 内容 | 主なファイル |
 |---|---|

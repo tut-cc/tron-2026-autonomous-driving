@@ -44,4 +44,4 @@ AI が動いているかは、Web の映像（`/video_feed`、240×180 の BMP�
 
 ## 記録するもの
 
-`MAKE_EVIDENCE.cmd` / `CHECK_BEFORE_FLASH.cmd` の結果、各項目の合否と Web 画面、`g_vc_start_result`・`g_control_fault`・停止理由、AI の変数（`g_ai_stage_us`・`g_ai_arena_used_bytes` など）、VM OFF/ON の別。
+外部ツール `demo_make_evidence`（`tools/make_evidence.py`）の結果、各項目の合否と Web 画面、`g_vc_start_result`・`g_control_fault`・停止理由、AI の変数（`g_ai_stage_us`・`g_ai_arena_used_bytes` など）、VM OFF/ON の別。
