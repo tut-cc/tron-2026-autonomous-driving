@@ -23,7 +23,7 @@ git clone https://github.com/tut-cc/tron-2026-autonomous-driving.git C:\TRON\tro
 1. e² studioを起動し、別の英数字ワークスペース（例 `C:\TRON\ws_ra8p1`）を選ぶ。
 2. **File → Import → General → Existing Projects into Workspace**（またはWelcomeの **Import existing projects**）を選ぶ。
 3. ルート・ディレクトリに `C:\TRON\tron-2026-autonomous-driving` を指定し、`ra8p1_vision_CPU0`、`ra8p1_vision_CPU1`、`ra8p1_vision_Solution` の3件をすべて選ぶ。**Copy projects into workspaceはオフ**にする。
-4. Project Explorerで `ra8p1_vision_Solution` を右クリックし、**Build Project** を選ぶと両コアをビルドできる。`ra8p1_vision_CPU0` の **Build Project** でも両コアをビルドする設定。CPU0/CPU1の両方が `0 errors` で終わることを確認する。初回からELFは入っているが、これは受取人の環境でビルドできることを確認する手順でもある。
+4. Project Explorerで `ra8p1_vision_Solution` を右クリックし、**Build Project** を選ぶと両コアをビルドできる。`ra8p1_vision_CPU0` の **Build Project** でも両コアをビルドする設定。コンソールに **`CPU0 OK` と `CPU1 OK`** が表示され、`terminated with exit code` がないことを確認する。e² studioの最終行が `0 errors` でも、外部ビルドコマンドが失敗している場合がある。初回からELFは入っているが、これは受取人の環境でビルドできることを確認する手順でもある。
 
 デバッグ起動設定は「起動前にCPU0プロジェクトをビルド」を有効化してあり、そのビルドは両コアを生成する。したがって **Debug As** を選ぶだけでもビルド後に書き込みへ進む。初回ビルドは数分かかる。`python` や `clang.exe` が見つからない場合は、PATHまたは `LLVM_ARM_BIN` を設定してIDEを再起動する。FSP Configuratorの **Generate Project Contentは実行しない**。設定とビルド対象は同梱済み。
 
