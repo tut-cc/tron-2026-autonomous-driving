@@ -13,3 +13,8 @@ JLinkLog.log
 __pycache__/
 *.pyc
 .metadata/
+# Evidence written by tools/make_evidence.py on every run (regenerate locally).
+# tools/evidence_tag.json stays tracked: build.py / manifest.py / verify.py read it.
+# M85Web/Application/web/fsdata.h stays tracked: firmware builds need it without Perl.
+/docs/demo_autofix_*.log
+/docs/MANIFEST.json

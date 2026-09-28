@@ -161,20 +161,25 @@ body[data-obstacle-alarm="true"] #alarm-badge { display: inline-flex; }
   margin:    0; z-index: 80;
 }
 
+/* 5b. 中断理由：拒否理由バナー（#alert-banner）と同じ画面上部中央に出す。
+       body 内の要素なので、縦持ち回転（10 章）時も body と一緒に回転して同じ位置になる。
+       拒否理由バナーは一時表示で、出ている間はこちらの上に重なる。 */
+#stop-reason {
+  position:  absolute; top: calc(60px + env(safe-area-inset-top, 0px)); left: 50%;
+  translate: -50% 0; max-width: min(90%, 480px); z-index: 30;
+  display:   none; align-items: center; justify-content: center; gap: 4px;
+  padding:   8px 16px; background: #000; border: 2px solid #000; border-radius: 6px;
+  font-size: 0.95rem; font-weight: 800; color: #aaa; white-space: normal; text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); pointer-events: none;
+  #stop-reason-text { color: #fff; }
+}
+
 /* 6. 操作フッター */
 .bottom-bar {
   position:  absolute;
   bottom: max(12px, env(safe-area-inset-bottom, 0px));
   right:  max(12px, env(safe-area-inset-right, 0px));
   display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 25;
-
-  #stop-reason {
-    position:  static; translate: none; max-width: min(45vw, 360px);
-    display:   none; align-items: center; justify-content: center; gap: 4px;
-    min-height: 36px; padding: 6px 10px; background: #000; border-radius: 6px;
-    font-size: 0.82rem; font-weight: 800; color: #aaa; white-space: normal; pointer-events: none;
-    #stop-reason-text { color: #fff; }
-  }
 
   .action-row {
     display: flex; gap: 8px;
@@ -200,7 +205,6 @@ body[data-obstacle-alarm="true"] #alarm-badge { display: inline-flex; }
   .bottom-bar .action-row .action-btn.btn-stop {
     width: clamp(112px, 32vw, 156px); min-height: 46px; font-size: 0.92rem;
   }
-  .bottom-bar #stop-reason { max-width: min(42vw, 190px); }
 }
 
 @media (orientation: landscape) and (max-height: 430px) {

@@ -215,6 +215,13 @@
 #define MEMP_NUM_PBUF                   96
 #define PBUF_POOL_SIZE                  96
 
+/* Web UI: a desktop/iPad browser opens up to 6 parallel connections plus idle
+ * preconnects, while the UI polls /api/control and /video_feed.  With the lwIP
+ * default of 5, new SYNs were dropped (all HTTPD PCBs share TCP_PRIO_MIN, so
+ * tcp_alloc cannot evict one).  ~200 B per PCB; send data still comes from
+ * the shared MEM_SIZE heap / pbuf pools, so this does not raise buffer use. */
+#define MEMP_NUM_TCP_PCB                16
+
 /* HW checksum offload is only configured on STM32Cube targets:
  * TX HW offload is enabled by main.c. RX HW offload is enabled in phy.h
  * (MACConf.ChecksumOffload = ENABLE) and frames flagged with the descriptor
