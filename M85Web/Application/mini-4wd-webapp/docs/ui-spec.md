@@ -78,9 +78,11 @@ stateDiagram-v2
     [*] --> MANUAL_DRIVING
 
     MANUAL_DRIVING --> AUTO_PENDING: mode_request=AUTO
-    AUTO_PENDING --> MANUAL_DRIVING: 要求拒否受信 / 1.0sタイムアウト
+    AUTO_PENDING --> MANUAL_DRIVING: 要求拒否受信
     AUTO_PENDING --> AUTO: mode=AUTO
 ```
+
+1.0秒で応答がない場合、WebAppは待機中のAUTO要求を解除してタイムアウトを表示します。MANUAL要求は自動生成せず、遅れて届いたM33状態に画面を合わせます。
 
 ## 2. 各モードにおけるUI表示・操作可否マトリクス
 

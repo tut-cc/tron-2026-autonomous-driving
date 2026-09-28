@@ -96,12 +96,6 @@ void control_motor_default_config(control_motor_config_t * config)
     config->curve_slowdown = 0.40F;
     config->max_steering = 0.35F;
 
-    config->obstacle_confidence_min = (float) AI_OBSTACLE_CONFIDENCE_MIN_PER_MILLE / 1000.0F;
-    config->obstacle_overlap_min = (float) AI_OBSTACLE_OVERLAP_MIN_PER_MILLE / 1000.0F;
-    config->obstacle_bottom_tor = 0.95F;
-    config->obstacle_tor_mm = 250U;
-    config->obstacle_slowdown_gain = 0.65F;
-
     /* ~7 camera frames (2-3 s) to learn a constant imbalance; at most
      * 0.10 of wheel command, well inside max_steering. */
     config->steering_trim_initial = 0.0F;
@@ -161,10 +155,8 @@ void control_motor_update(control_motor_t * controller,
     uint8_t i;
     uint8_t path_values_valid;
     uint8_t new_ai_frame = 0U;
-    uint8_t near_obstacle = 0U;
     float maximum_obstacle_risk = 0.0F;
     float confidence_scale;
-    float obstacle_scale;
     float speed_command;
     float steering_command;
     float minimum_motor_command;
@@ -265,19 +257,6 @@ void control_motor_update(control_motor_t * controller,
         return;
     }
 
-    /* An obstacle may obscure the road itself.  Evaluate a fresh valid
-     * detection before path validity so loss of the path cannot mask a
-     * person/car-sized hazard in the forward corridor. */
-    if (0U == perception->obstacle_valid)
-    {
-        set_stopped_output(controller, perception, tof,
-                           CONTROL_STATE_TOR,
-                           CONTROL_REASON_OBSTACLE_PROCESSING_INVALID,
-                           MOTOR_STOP_COAST,
-                           output);
-        return;
-    }
-
     if (perception->obstacle_count > AI_CONTROL_MAX_OBSTACLES)
     {
         set_stopped_output(controller, perception, tof,
@@ -288,7 +267,10 @@ void control_motor_update(control_motor_t * controller,
         return;
     }
 
-    for (i = 0U; i < perception->obstacle_count; ++i)
+    /* Obstacle inference is advisory. A missing obstacle result contributes
+     * no slowdown/alarm sample, but cannot interrupt valid road following.
+     * Malformed payloads and path/ToF failures remain fail-safe below. */
+    for (i = 0U; perception->obstacle_valid && i < perception->obstacle_count; ++i)
     {
         const ai_obstacle_result_t * obstacle = &perception->obstacles[i];
         float risk;
@@ -312,27 +294,6 @@ void control_motor_update(control_motor_t * controller,
             maximum_obstacle_risk = risk;
         }
 
-        /* A person/car in the corridor only slows the car down (risk above)
-         * until it is close: ToF within obstacle_tor_mm, or the box already
-         * at the bottom of the image (an object below the ToF beam). */
-        if ((obstacle->confidence >= controller->config.obstacle_confidence_min) &&
-            (obstacle->corridor_overlap >= controller->config.obstacle_overlap_min) &&
-            ((tof->distance_mm <= controller->config.obstacle_tor_mm) ||
-             (obstacle->bbox_bottom >= controller->config.obstacle_bottom_tor)))
-        {
-            near_obstacle = 1U;
-        }
-    }
-
-    if (0U != near_obstacle)
-    {
-        set_stopped_output(controller, perception, tof,
-                           CONTROL_STATE_TOR,
-                           CONTROL_REASON_OBSTACLE_IN_CORRIDOR,
-                           MOTOR_STOP_BRAKE,
-                           output);
-        output->obstacle_risk = maximum_obstacle_risk;
-        return;
     }
 
     if (0U == perception->path_valid)
@@ -407,11 +368,7 @@ void control_motor_update(control_motor_t * controller,
     controller->reason = CONTROL_REASON_NONE;
 
     confidence_scale = 0.50F + (0.50F * perception->path_confidence);
-    obstacle_scale = 1.0F -
-                     (controller->config.obstacle_slowdown_gain * maximum_obstacle_risk);
-    obstacle_scale = clampf_local(obstacle_scale, 0.20F, 1.0F);
-
-    speed_command = controller->config.base_command * confidence_scale * obstacle_scale;
+    speed_command = controller->config.base_command * confidence_scale;
     if ((0U != controller->trim_learning) &&
         ((0U == controller->steering_valid) || (perception->seq != controller->steering_ai_seq)) &&
         (perception->heading_error <= controller->config.steering_trim_heading_gate) &&
@@ -475,7 +432,6 @@ void control_motor_update(control_motor_t * controller,
     output->right_command = clampf_local(speed_command - steering_command,
                                          minimum_motor_command, 1.0F);
     output->steering_command = steering_command;
-    output->speed_scale = clampf_local(confidence_scale * obstacle_scale, 0.0F, 1.0F);
+    output->speed_scale = clampf_local(confidence_scale, 0.0F, 1.0F);
     output->obstacle_risk = clampf_local(maximum_obstacle_risk, 0.0F, 1.0F);
 }
-

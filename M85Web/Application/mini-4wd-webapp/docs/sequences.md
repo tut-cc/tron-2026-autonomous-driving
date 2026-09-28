@@ -41,7 +41,8 @@ sequenceDiagram
 
     else 異常系 3: タイムアウト (パケットロス / 無応答)
         Note over W: 要求送信後 1000ms 経過しても<br/>mode=AUTO のHeartbeatを受信しない
-        W->>W: MANUALモード に戻す<br/>エラー通知表示: モード切替がタイムアウトしました
+        W->>W: AUTO待機要求を解除<br/>エラー通知表示: モード切替がタイムアウトしました
+        Note over W: MANUAL要求は自動送信しない。遅れて届くM33の実状態を表示
     end
 ```
 

@@ -126,20 +126,27 @@ int main(void)
     perception.obstacles[0].corridor_overlap = 0.90F;
     perception.obstacles[0].center_x = 0.0F;
     perception.obstacles[0].bbox_bottom = 0.90F;
-    /* 2026-09-28: a person/car far away only slows the car down... */
+    /* A person/car detection is diagnostic only; road following remains active. */
     tof = make_tof(4U, 40U, 500U);
     control_motor_update(&controller, &perception, &tof, 40U, &output);
     assert(1U == output.motor_enable);
-    assert(output.speed_scale < 1.0F);
-    /* ...and hands over (TOR, brake) once the ToF sees it within obstacle_tor_mm. */
+    assert(output.speed_scale > 0.0F);
+    /* Close/flickering obstacle detections still don't change mode or stop. */
     perception.seq = 5U;
     perception.capture_timestamp_ms = 50U;
-    tof = make_tof(5U, 50U, config.obstacle_tor_mm);
+    tof = make_tof(5U, 50U, 200U);
     control_motor_update(&controller, &perception, &tof, 50U, &output);
-    assert(CONTROL_STATE_TOR == output.state);
-    assert(CONTROL_REASON_OBSTACLE_IN_CORRIDOR == output.reason);
-    assert(MOTOR_STOP_BRAKE == output.stop_action);
-    assert(0U == output.motor_enable);
+    assert(CONTROL_STATE_AUTO == output.state);
+    assert(1U == output.motor_enable);
+
+    /* Detector unavailable: a valid road path remains usable. */
+    perception.seq = 6U;
+    perception.capture_timestamp_ms = 60U;
+    perception.obstacle_valid = 0U;
+    tof = make_tof(6U, 60U, 500U);
+    control_motor_update(&controller, &perception, &tof, 60U, &output);
+    assert(CONTROL_STATE_AUTO == output.state);
+    assert(1U == output.motor_enable);
 
     control_motor_init(&controller, &config, 0U);
     reach_auto(&controller, &perception, &tof, &output);

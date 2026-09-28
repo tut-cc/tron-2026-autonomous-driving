@@ -77,7 +77,6 @@ void vc_init(vc_t *v, uint32_t now)
     c.tof_timeout_ms = VC_TOF_FRESH_MS;
     c.tof_stop_mm = VC_TOF_STOP_MM;
     c.tof_release_mm = VC_TOF_CLEAR_MM;
-    c.obstacle_tor_mm = VC_OBSTACLE_TOR_MM;
     c.steering_trim_initial = VC_STEERING_TRIM_INITIAL;
     control_motor_init(&v->path, &c, now);
     v->status.reason = VC_WAITING;
@@ -331,8 +330,8 @@ void vc_step(vc_t *v, uint32_t now, control_motor_output_t *out)
     control_motor_update(&v->path, v->in.have_ai ? &v->in.ai : 0, v->in.have_tof ? &v->in.tof : 0, now, &p);
     g_vc_steering_trim_permille = (int32_t)(VC_PERMILLE_MAX * v->path.steering_trim);
 
-    /* ToF (wall) and link are stops in every mode.  A person/car is not: in
-     * AUTO it becomes a TOR below (VC_TOR_OBSTACLE); MANUAL is the driver's. */
+    /* ToF (wall) and link are stops in every mode. Person/car detections are
+     * advisory only: the M85 logs them, and the M33 does not alter motor output. */
     unsafe = vc_unsafe_reason(v, now);
     if (v->status.armed && unsafe != VC_OK)
         vc_stop(v, unsafe, unsafe != VC_TOF_PRESTOP);
@@ -354,11 +353,11 @@ void vc_step(vc_t *v, uint32_t now, control_motor_output_t *out)
     }
 
     if (v->status.armed && v->status.mode == VC_MODE_AUTO) {
-        /* AUTO ignores the phone: ToF / M85 link are stops (above); a close
-         * person/car or a path the follower can no longer drive is a TOR. */
+        /* AUTO ignores the phone: ToF / M85 link are stops (above); a path the
+         * follower can no longer drive is a TOR. Obstacle alarms don't affect
+         * the mode or motor output; the Web UI prompts the operator. */
         if (!p.motor_enable)
-            enter_tor(v, now, p.reason == CONTROL_REASON_OBSTACLE_IN_CORRIDOR ?
-                              VC_TOR_OBSTACLE : VC_TOR_REQUEST);
+            enter_tor(v, now, VC_TOR_REQUEST);
         else { l = p.left_command; r = p.right_command; }
     } else if (v->status.armed) {
         /* MANUAL fail-safe: lost phone link must not keep the last command. */

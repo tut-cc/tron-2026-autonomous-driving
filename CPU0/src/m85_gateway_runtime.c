@@ -8,6 +8,7 @@ static ipc_endpoint_t g_endpoint;
 static ipc_gateway_t g_gateway;
 static vc_status_t g_status;
 static bool g_initialized;
+static bool g_bound;
 static bool g_status_valid;
 static ID g_status_mutex;
 
@@ -17,10 +18,11 @@ bool m85_gateway_runtime_init(void)
     {
         return true;
     }
-    if (dc_bind(&g_endpoint))
+    if (!g_bound && dc_bind(&g_endpoint))
     {
         return false;
     }
+    g_bound = true;
     /* M33 initializes the shared ABI before producers are admitted. */
     for (uint32_t retry = 0U; retry < 10000U; ++retry)
     {
@@ -37,7 +39,9 @@ bool m85_gateway_runtime_init(void)
             g_initialized = true;
             return true;
         }
-        R_BSP_SoftwareDelay(1U, BSP_DELAY_UNITS_MILLISECONDS);
+        /* This runs in a task; yield so lwIP and HTTP remain schedulable while
+         * the other core is still initializing the shared IPC block. */
+        (void) tk_dly_tsk(1U);
     }
     return false;
 }

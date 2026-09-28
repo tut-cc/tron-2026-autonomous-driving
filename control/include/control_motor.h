@@ -63,17 +63,6 @@ typedef struct
     /* Curve slowdown: speed x (1 - curve_slowdown x |steering| / max_steering). */
     float curve_slowdown;
 
-    /* Person/car obstacle (2026-09-28): an obstacle counts when it meets
-     * both minimums.  It only slows the car down until it is within
-     * obstacle_tor_mm on the ToF (or its box reaches obstacle_bottom_tor of
-     * the image height, for objects below the ToF beam); then the follower
-     * reports CONTROL_REASON_OBSTACLE_IN_CORRIDOR and the M33 enters TOR. */
-    float obstacle_confidence_min;
-    float obstacle_overlap_min;
-    float obstacle_bottom_tor;
-    uint16_t obstacle_tor_mm;
-    float obstacle_slowdown_gain;
-
     /* Automatic wheel-balance trim (2026-09-28): a slow integral of the raw
      * steering error learns the constant correction that unequal motors need,
      * so a straight strip is driven straight without a per-car constant.
@@ -105,7 +94,7 @@ typedef struct
     float right_command;     /* -1.0 .. +1.0 */
     float steering_command;  /* -1.0 .. +1.0, right positive */
     float speed_scale;       /* 0.0 .. 1.0 */
-    float obstacle_risk;     /* 0.0 .. 1.0 */
+    float obstacle_risk;     /* diagnostic only; detections don't alter output */
 } control_motor_output_t;
 
 typedef struct

@@ -199,9 +199,16 @@ EXPORT  INT usermain( void )
         return -1;
     }
     dc_primary_start();
-    if (!m85_gateway_runtime_init()) {
-        tm_printf((UB *) "M85 IPC gateway initialization failed.\n");
+    /* Start the network before waiting for M33 IPC READY. Runtime init yields
+     * while retrying, so lwIP can serve the UI and report control unavailable. */
+    tskid_lwip = tk_cre_tsk(&ctsk_lwip);
+    if (tskid_lwip <= 0 || tk_sta_tsk(tskid_lwip, 0) < E_OK) {
+        tm_printf((UB *) "M85 lwIP task start failed.\n");
         return -1;
+    }
+    while (!m85_gateway_runtime_init()) {
+        tm_printf((UB *) "Waiting for M33 IPC READY...\n");
+        tk_dly_tsk(100);
     }
     if (!m85_gateway_task_start()) {
         tm_printf((UB *) "M85 IPC gateway task initialization failed.\n");
@@ -226,13 +233,6 @@ EXPORT  INT usermain( void )
         tm_printf((UB *) "M85 USB stream task start failed.\n");
         return -1;
     }
-    /* Create & Start Tasks */
-    tskid_lwip = tk_cre_tsk(&ctsk_lwip);
-    if (tskid_lwip <= 0 || tk_sta_tsk(tskid_lwip, 0) < E_OK) {
-        tm_printf((UB *) "M85 lwIP task start failed.\n");
-        return -1;
-    }
-
     tk_slp_tsk(TMO_FEVR);
 
     return 0;

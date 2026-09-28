@@ -30,11 +30,9 @@ typedef enum {
     /* Distinct stop causes shown to the operator (2026-09-27 field fix). */
     VC_TOF_NEAR,          /* valid distance <= VC_TOF_STOP_MM: EMERGENCY          */
     VC_ESTOP,             /* explicit Web ESTOP: latched until a board reset       */
-    VC_AI_OBSTACLE,       /* no longer produced (2026-09-28: see VC_TOR_OBSTACLE)  */
+    VC_AI_OBSTACLE,       /* legacy reason; obstacle alarms no longer stop AUTO   */
     VC_TOF_PRESTOP,       /* valid distance <= VC_TOF_PRESTOP_MM: ordinary STOP    */
-    /* AUTO: person/car in the corridor within VC_OBSTACLE_TOR_MM.  Same as
-     * VC_TOR_REQUEST (state VC_TOR, output 0), but tells the driver why. */
-    VC_TOR_OBSTACLE,
+    VC_TOR_OBSTACLE,      /* legacy numeric value; obstacle alarms do not enter TOR */
     VC_REASON_COUNT
 } vc_reason_t;
 static inline int vc_reason_is_auto_refusal(uint32_t reason)
@@ -91,14 +89,6 @@ static inline int vc_permille_ok(int32_t value)
 #define VC_LINK_FRESH_MS      300U  /* M85 heartbeat must be newer than this   */
 #define VC_AI_FRESH_MS        AI_FRAME_MAX_AGE_MS /* AI frame age limit (see ai_control_signals.h) */
 #define VC_TOR_TIMEOUT_MS    3000U  /* TOR unanswered this long -> safe stop  */
-/* 2026-09-28 demo layout: a person/car seen by the camera only raises an
- * alarm (M85 -> Web) and slows AUTO down; within this ToF distance AUTO hands
- * over to the driver (TOR).  Must stay beyond the ToF stop distance so the
- * hand-over happens before the wall stop. */
-#define VC_OBSTACLE_TOR_MM    250U
-#if VC_OBSTACLE_TOR_MM <= VC_TOF_CLEAR_MM
-#error "VC_OBSTACLE_TOR_MM must be beyond the ToF stop/clear distance"
-#endif
 /* Wheel-balance trim the AUTO follower starts from (learned value shown in
  * g_vc_steering_trim_permille; positive = more left-wheel command).  0 lets
  * the car learn it on every power-up; a value read from the debugger may be

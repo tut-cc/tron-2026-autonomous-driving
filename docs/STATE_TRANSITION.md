@@ -74,7 +74,6 @@ stateDiagram-v2
 
     %% AUTO からの遷移
     AUTO --> TOR: 走行路見失い / AI認識途絶\n/ armed=0, reason=VC_TOR_REQUEST, 出力=0
-    AUTO --> TOR: 人物・車両検知 かつ 前方ToF <= 250mm\n/ armed=0, reason=VC_TOR_OBSTACLE, 出力=0
     AUTO --> STOPPED: Web STOP要求 (ABORT)\n/ armed=0, mode=MANUAL, reason=VC_OPERATOR
     AUTO --> STOPPED: 前方障害物 ToF 51〜100mm\n/ armed=0, mode=MANUAL, reason=VC_TOF_PRESTOP
     AUTO --> EMERGENCY: 前方危険 ToF <= 50mm\n/ armed=0, mode=MANUAL, reason=VC_TOF_NEAR
@@ -220,7 +219,7 @@ sequenceDiagram
 
 ---
 
-### シーケンス 3: 人物・車両検知から TOR（運転引継ぎ）およびタイムアウト
+### シーケンス 3: 人物・車両検知のアラームとログ
 
 ```mermaid
 sequenceDiagram
@@ -236,31 +235,16 @@ sequenceDiagram
     M85-->>W: HTTP 200 {obstacle_alarm: true, obstacle_kind: "PERSON", alarm_seq: 1}
     W->>U: 画面上部「⚠ 人物を検知」表示 & 左上ログ追加 (走行継続)
 
-    M33->>M33: 車両が前進し、人物が前方 250mm (ToF) 以内に進入！\nenter_tor(VC_TOR_OBSTACLE)\n-> 即時モーター出力を 0 に遮断！
-    M33-->>M85: IPC_STATUS (state=TOR, reason=VC_TOR_OBSTACLE)
-    M85-->>W: HTTP 200 {mode: "AUTO", tor_active: true, tor_remaining_ms: 3000, stop_reason: "AI_OBSTACLE"}
-    W->>U: 赤白枠点滅オーバーレイ & 3秒カウントダウン表示
+    Note over M85,M33: 障害物検知はモード変更要求に使わない
+    M85-->>W: HTTP 200 {obstacle_alarm: true, obstacle_kind: "PERSON", alarm_seq: 1}
+    W->>U: 画面上部のバッジとログで通知
+    M33->>M33: 有効な走行路があればAUTOとモーター出力を維持
+    U->>W: 必要と判断した場合にMANUALへ切替
+    W->>M85: POST /api/control {mode_request: "MANUAL"}
+    M85->>M33: IPC_WEB (operator mode request)
+    M33->>M33: STOPPED / MANUALへ切替
 
-    alt パターン A: 運転者が「TAKE OVER」ボタンを押す
-        U->>W: 「TAKE OVER」ボタン押下
-        W->>W: state = TOR_MANUAL_PENDING
-        W->>M85: POST /api/control {mode_request: "MANUAL", client_mode: "MANUAL"}
-        M85->>M33: IPC_WEB (action=MODE, mode=MANUAL)
-        M33->>M33: vc_stop(VC_OK, 0) -> state=STOPPED, mode=MANUAL\n手動モードへの引き継ぎ完了
-        M33-->>M85: IPC_STATUS (state=STOPPED, mode=MANUAL, armed=0)
-        M85-->>W: HTTP 200 {mode: "MANUAL", tor_active: false, armed: false}
-        W->>W: state = MANUAL (停止状態) に遷移。手動操作可能に！
-    else パターン B: 3秒間誰も操作しない (タイムアウト)
-        M33->>M33: 3000ms 経過 (VC_TOR_TIMEOUT_MS)\nstate=STOPPED, mode=MANUAL, reason=VC_TOR_TIMEOUT
-        M33-->>M85: IPC_STATUS (state=STOPPED, reason=VC_TOR_TIMEOUT)
-        M85-->>W: HTTP 200 {mode: "AUTO_ABORT", tor_active: false, stop_reason: "TOR_TIMEOUT"}
-        W->>W: state = AUTO_ABORT に遷移 (完全停止・ロック)
-        W->>U: 停止理由「引継ぎ時間切れ」表示、ボタンが「RESET」に変化
-        U->>W: 「RESET」ボタン押下
-        W->>M85: POST /api/control {reset_abort_request: true}
-        M85->>M33: IPC_STOP (action=STOP) -> reason が VC_OPERATOR に更新
-        M85-->>W: HTTP 200 {mode: "MANUAL", armed: false}
-        W->>W: state = MANUAL に復帰
+    Note over M33: ToFの100 mm停止・50 mm緊急停止は障害物ログと独立して優先
     end
 ```
 

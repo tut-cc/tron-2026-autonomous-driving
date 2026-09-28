@@ -120,7 +120,7 @@ static stop_reason_t response_stop_reason(const vc_status_t *status)
     case VC_TOF_PRESTOP: return STOP_REASON_DISTANCE_PRESTOP;
     case VC_ESTOP:       return STOP_REASON_BUTTON_EMERGENCY;
     case VC_AI_OBSTACLE:
-    case VC_TOR_OBSTACLE: return STOP_REASON_AI_OBSTACLE; /* TOR: close person/car */
+    case VC_TOR_OBSTACLE: return STOP_REASON_AI_OBSTACLE; /* legacy status compatibility */
     case VC_OPERATOR: return STOP_REASON_MANUAL_ABORT_BUTTON;
     case VC_LINK:     /* M85 heartbeat to M33 lost */
     case VC_WEB:      return STOP_REASON_COMM_TIMEOUT; /* Web command stale/invalid */

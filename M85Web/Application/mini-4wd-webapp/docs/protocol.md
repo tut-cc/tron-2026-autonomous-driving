@@ -75,11 +75,11 @@ WebAppは、自身が現在認識しているモード `client_mode` を付与�
 | `obstacle_kind` | `NONE` / `PERSON` / `CAR` / `PERSON_AND_CAR` | 検知中の種類（`obstacle_alarm=false` なら `NONE`） |
 | `alarm_seq` | uint32 | 新しいアラームのたびに1増える番号。WebAppはこの値が変わるたびにログを1行残す（3フレーム見えなくなると次の検知は新しいアラーム） |
 
-HTTP応答は、POSTした要求より前のM33状態スナップショットを返す場合があります。WebAppは新しい `web_seq` だけで切替成功とはせず、AUTOは `mode=AUTO` または明示拒否、MANUAL復帰は `mode=MANUAL` かつ `armed=false` を確認します。AUTO要求がタイムアウトした場合はAUTO再送を止め、MANUAL要求を再送してM33のMANUAL・非arm状態が確認できるまで操作入力を解放しません。Web resetはM33のEmergencyラッチを解除しません。
+HTTP応答は、POSTした要求より前のM33状態スナップショットを返す場合があります。WebAppは新しい `web_seq` だけで切替成功とはせず、AUTOは `mode=AUTO` または明示拒否、MANUAL復帰は `mode=MANUAL` かつ `armed=false` を確認します。AUTO要求がタイムアウトした場合はAUTO再送を止めて要求待ちを解除し、M33の実状態を表示します。遅れてAUTOに切り替わった場合もMANUAL要求を自動生成しません。Web resetはM33のEmergencyラッチを解除しません。
 
 #### `stop_reason`（中断要因）の定義
 - `NONE`: 中断なし（正常）
-- `OBSTACLE`: 旧版との互換用。現行のM33によるAI人物・車停止では `AI_OBSTACLE` を使う
+- `OBSTACLE` / `AI_OBSTACLE`: 旧版との互換用。現行は障害物をアラームとログで知らせるだけで、自動停止・モード移行・減速は行わない。ToFの独立停止は継続する。
 - `TOR_TIMEOUT`: TOR猶予時間切れ（AUTO_ABORT）
 - `MANUAL_ABORT_BUTTON`: WebAppの ABORT / RESET 押下による停止（パッドを離しただけ・モード切替・AUTO拒否のあとは `NONE`）
 - `COMM_TIMEOUT`: 通信途絶による自律中断（AUTO_ABORT）
@@ -87,7 +87,6 @@ HTTP応答は、POSTした要求より前のM33状態スナップショットを
 - `DISTANCE_PRESTOP`: ToFが100 mm以下の通常停止（緊急停止ではない）
 - `DISTANCE_EMERGENCY`: ToFが50 mm以下の緊急停止（101 mm以上に離れると自動解除、再発進には操作が必要）
 - `BUTTON_EMERGENCY`: ESTOP要求による緊急停止（Web画面からは発生しない）（基板リセットまで解除されない）
-- `AI_OBSTACLE`: AUTO中、進路上の人物・車が前方250 mm以内（ToF）に近づいたための運転引継ぎ要求（`tor_active=true`）。人物・車が遠い間は停止せず `obstacle_alarm` で知らせるだけ（2026-09-28）
 - `ROAD_UNAVAILABLE`: AUTO中に受け取ったAI情報が不正・鮮度切れのための停止（走行路の喪失はTORになる）
 - `INTERNAL_FAULT`: M33のモーター出力・カーネルの異常による停止（基板リセットまで解除されない）
 
@@ -130,7 +129,7 @@ WebAppは `tor_active: true` を受信した際に、UI内部で `AUTO_TOR` 状�
 | **HTTPポーリング周期** | `100 ms` | WebApp | コマンド送信 (`POST /api/control`) の周期 |
 | **Heartbeat 監視** | `100 ms` | マイコン | 内部状態の定周期更新とデッドマン/タイムアウト評価 |
 | **デッドマンタイマー** | `300 ms` | マイコン | 操作コマンドが途絶えた場合にモーターを自動停止 |
-| **Pending タイムアウト** | `1,000 ms` | WebApp | モード切替要求後、マイコンの状態が変わらない場合に要求失敗と判定 |
+| **Pending タイムアウト** | `1,000 ms` | WebApp | AUTO要求の待ちを解除してエラー表示。実際のM33状態を表示し、MANUAL指令は自動送信しない |
 | **通信切断判定** | `1,500 ms` | WebApp / マイコン | テレメトリ途絶で `DISCONNECTED` 遷移、マイコンは `AUTO_ABORT` |
 | **TOR 猶予時間** | `3,000 ms` (3秒) | マイコン | カウントダウンが0に達した場合、マイコンが `AUTO_ABORT` へ自律遷移 |
 

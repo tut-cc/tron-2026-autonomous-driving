@@ -46,8 +46,8 @@ extern "C" {
 /*
  * Person/car obstacle in the driving corridor (2026-09-28 demo layout).
  * The M85 raises an alarm to the Web UI for every detection that meets both
- * limits; the M33 asks the driver to take over (TOR) when such an obstacle is
- * also within VC_OBSTACLE_TOR_MM on the ToF.  One definition for both cores.
+ * limits. The alarm prompts manual attention but does not change M33 mode.
+ * One definition for both cores.
  */
 #define AI_OBSTACLE_CONFIDENCE_MIN_PER_MILLE (650U) /* detection score        */
 #define AI_OBSTACLE_OVERLAP_MIN_PER_MILLE    (400U) /* share inside corridor  */
