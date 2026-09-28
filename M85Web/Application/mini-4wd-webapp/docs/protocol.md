@@ -81,14 +81,17 @@ HTTP応答は、POSTした要求より前のM33状態スナップショットを
 - `NONE`: 中断なし（正常）
 - `OBSTACLE`: 旧版との互換用。現行のM33によるAI人物・車停止では `AI_OBSTACLE` を使う
 - `TOR_TIMEOUT`: TOR猶予時間切れ（AUTO_ABORT）
-- `MANUAL_ABORT_BUTTON`: WebAppまたは車体からの手動中断ボタン押下（MANUAL_ABORT）
+- `MANUAL_ABORT_BUTTON`: WebAppの ABORT / RESET 押下による停止（パッドを離しただけ・モード切替・AUTO拒否のあとは `NONE`）
 - `COMM_TIMEOUT`: 通信途絶による自律中断（AUTO_ABORT）
-- `SENSOR_ERROR`: 測距センサ（ToF）の無効・鮮度切れ
+- `SENSOR_ERROR`: 走行中（またはTOR中）に測距センサ（ToF）の値が無効・鮮度切れになったための緊急停止。停止中の無効値では停止理由を変えない
 - `DISTANCE_PRESTOP`: ToFが100 mm以下の通常停止（緊急停止ではない）
 - `DISTANCE_EMERGENCY`: ToFが50 mm以下の緊急停止（101 mm以上に離れると自動解除、再発進には操作が必要）
 - `BUTTON_EMERGENCY`: ESTOP要求による緊急停止（Web画面からは発生しない）（基板リセットまで解除されない）
 - `AI_OBSTACLE`: AUTO中、進路上の人物・車が前方250 mm以内（ToF）に近づいたための運転引継ぎ要求（`tor_active=true`）。人物・車が遠い間は停止せず `obstacle_alarm` で知らせるだけ（2026-09-28）
 - `ROAD_UNAVAILABLE`: AUTO中に受け取ったAI情報が不正・鮮度切れのための停止（走行路の喪失はTORになる）
+- `INTERNAL_FAULT`: M33のモーター出力・カーネルの異常による停止（基板リセットまで解除されない）
+
+センサー・通信による緊急停止は原因が消えると自動で解除されますが、`stop_reason` は次に走り出すまで元の原因のまま残ります（2026-09-28）。
 
 #### `request_reject_reason`（要求拒否理由）の定義
 - `NONE`: 拒否なし（正常受諾）

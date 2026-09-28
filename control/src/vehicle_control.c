@@ -133,18 +133,24 @@ bad:
     return why;
 }
 
-/* A missing, malformed or stale ToF sample is itself an emergency: the
- * front distance is unknown. */
+/* While driving (or waiting in TOR) a missing, malformed or stale ToF
+ * sample is an emergency: the front distance is unknown.  While stopped it is
+ * only recorded: tof_ok() already refuses any start, and latching EMERGENCY
+ * here made the Web UI flicker MANUAL <-> MANUAL_ABORT on every odd sample
+ * (sigma fail, open space) with nothing moving (2026-09-28). */
+static int tof_guarded(const vc_t *v)
+{ return v->status.armed || v->status.state == VC_TOR; }
 vc_input_result_t vc_tof(vc_t *v, const tof_safety_result_t *p, uint32_t now)
 {
     if (!p || p->valid > 1 || !fresh(now, p->sample_timestamp_ms, VC_TOF_FRESH_MS)) {
         v->in.tof.valid = 0; v->status.tof_valid = 0;
-        vc_stop(v, VC_TOF, 1);
+        if (tof_guarded(v)) vc_stop(v, VC_TOF, 1);
         return (p && p->valid <= 1) ? VC_INPUT_STALE : VC_INPUT_INVALID;
     }
     if (v->in.have_tof && !newer(p->seq, v->in.tof.seq)) return VC_INPUT_NOT_NEWER;
     v->in.tof = *p; v->in.have_tof = 1;
     v->status.tof_mm = p->distance_mm; v->status.tof_valid = p->valid;
+    if (!tof_guarded(v)) return VC_INPUT_ACCEPTED;
     if (!p->valid) vc_stop(v, VC_TOF, 1);
     else if (p->distance_mm <= VC_TOF_STOP_MM) vc_stop(v, VC_TOF_NEAR, 1);
     else if (p->distance_mm <= VC_TOF_PRESTOP_MM && v->status.armed)
@@ -195,7 +201,7 @@ vc_input_result_t vc_web(vc_t *v, const vc_web_t *w, uint32_t now)
     /* AUTO button: start autonomous driving (if ToF/link/AI path are OK).
      * MANUAL button (or any stop): back to MANUAL. */
     if (w->action == VC_WEB_MODE && w->mode != v->status.mode) {
-        vc_stop(v, VC_OPERATOR, 0);
+        vc_stop(v, VC_OK, 0);            /* a mode switch is not an abort */
         if (w->mode == VC_MODE_AUTO) {
             v->status.mode = VC_MODE_AUTO;
             vc_arm_result_t armed = vc_start(v, now);
@@ -220,14 +226,14 @@ vc_input_result_t vc_web(vc_t *v, const vc_web_t *w, uint32_t now)
         vc_reason_is_auto_refusal(v->status.reason)) {
         /* Consume a refusal when the UI has seen it and synchronized to MANUAL.
          * AUTO_PENDING polls keep client_mode=AUTO, so they cannot erase it. */
-        v->status.reason = VC_OPERATOR;
+        v->status.reason = VC_OK;
     }
     /* MANUAL: the vehicle drives only while a D-pad button is held. */
     if (v->status.mode == VC_MODE_MANUAL) {
         if (!v->status.armed && w->action == VC_WEB_DRIVE && w->deadman)
             (void)vc_start(v, now);
         else if (v->status.armed && !w->deadman)
-            vc_stop(v, VC_OPERATOR, 0);
+            vc_stop(v, VC_OK, 0);        /* D-pad released: normal idle, no stop cause */
     }
     return VC_INPUT_ACCEPTED;
 }
@@ -285,7 +291,8 @@ vc_arm_result_t vc_clear_emergency(vc_t *v, uint32_t now)
     if (result != VC_ARM_OK) return result;
     v->status.state = VC_STOPPED;
     v->status.armed = 0;
-    v->status.reason = VC_OPERATOR;
+    /* status.reason keeps the cause (e.g. VC_TOF_NEAR) so the operator still
+     * sees why the car stopped; the next start sets VC_OK. */
     v->left = v->right = 0;
     return VC_ARM_OK;
 }

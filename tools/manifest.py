@@ -121,7 +121,7 @@ def build_manifest(profile: str, verify_source_zips: bool = False) -> dict[str, 
 
     source_config_paths = [
         "docs/DEVELOPMENT.md", "tools/build.py", "tools/verify.py", "tools/manifest.py",
-        "tools/test_host.py", "tools/make_evidence.py", "CHECK_BEFORE_FLASH.cmd", "MAKE_EVIDENCE.cmd",
+        "tools/test_host.py", "tools/make_evidence.py",
         "CPU0/tools/control_motor_contract_test.c", "CPU0/tools/road_navigation_contract_test.c",
         "CPU0/tools/frame_stream_bmp_contract_test.c", "CPU0/tools/frame_stream_overlay_contract_test.c",
         "CPU0/tools/frame_stream_bmp_fixture.c",

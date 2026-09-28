@@ -50,6 +50,7 @@ int main(void)
     assert(strcmp(control_stop_reason_name(STOP_REASON_AI_OBSTACLE), "AI_OBSTACLE") == 0);
     assert(strcmp(control_stop_reason_name(STOP_REASON_DISTANCE_PRESTOP), "DISTANCE_PRESTOP") == 0);
     assert(strcmp(control_stop_reason_name(STOP_REASON_ROAD_UNAVAILABLE), "ROAD_UNAVAILABLE") == 0);
+    assert(strcmp(control_stop_reason_name(STOP_REASON_INTERNAL_FAULT), "INTERNAL_FAULT") == 0);
 
     assert(control_json_encode(&s, out, sizeof(out), &n));
     assert(n == strlen(out));

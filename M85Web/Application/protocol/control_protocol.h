@@ -37,6 +37,7 @@ typedef enum
     STOP_REASON_AI_OBSTACLE,        /* person/car close ahead: TOR (AUTO)     */
     STOP_REASON_DISTANCE_PRESTOP,   /* ToF <= ordinary stop distance (100 mm) */
     STOP_REASON_ROAD_UNAVAILABLE,   /* AI frame invalid/stale in AUTO         */
+    STOP_REASON_INTERNAL_FAULT,     /* M33 driver/kernel fault: board reset   */
     STOP_REASON_COUNT
 } stop_reason_t;
 /* Person/car alarm raised by the M85 camera (independent of the drive mode). */

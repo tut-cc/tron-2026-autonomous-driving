@@ -57,8 +57,17 @@ static void test_core(void) {
     assert(!o.motor_enable&&v.status.state==VC_STOPPED&&v.status.reason==VC_TOF_PRESTOP);
     assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,45)==0&&!v.status.armed);
     assert(g_vc_start_result==VC_ARM_TOF_NOT_OK);
-    /* ToF near (<= VC_TOF_STOP_MM): emergency; it clears itself only beyond
-     * VC_TOF_CLEAR_MM (hysteresis) and never restarts by itself. */
+    /* Stopped: a near or invalid sample changes nothing (no MANUAL_ABORT
+     * flicker); the start stays refused by tof_ok(). */
+    t=(tof_safety_result_t){5,45,VC_TOF_STOP_MM,1,0};assert(vc_tof(&v,&t,45)==0);vc_link(&v,45);vc_step(&v,45,&o);
+    assert(v.status.state==VC_STOPPED&&v.status.reason==VC_TOF_PRESTOP&&!v.status.armed);
+    t=(tof_safety_result_t){6,46,0,0,0};assert(vc_tof(&v,&t,46)==0);vc_step(&v,46,&o);
+    assert(v.status.state==VC_STOPPED&&v.status.reason==VC_TOF_PRESTOP&&!v.status.tof_valid);
+    assert(vc_tof(&v,0,47)<0&&v.status.state==VC_STOPPED);
+    /* Driving: ToF near (<= VC_TOF_STOP_MM) is an emergency; it clears itself
+     * only beyond VC_TOF_CLEAR_MM (hysteresis), keeps showing its cause and
+     * never restarts by itself. */
+    boot(&v);assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,30)==0&&v.status.armed);
     t=(tof_safety_result_t){5,50,VC_TOF_STOP_MM,1,0};assert(vc_tof(&v,&t,50)==0);vc_link(&v,50);vc_step(&v,50,&o);
     assert(!o.motor_enable&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_TOF_NEAR);
     t=(tof_safety_result_t){6,60,VC_TOF_PRESTOP_MM,1,0};vc_tof(&v,&t,60);vc_link(&v,60);vc_step(&v,60,&o);
@@ -66,6 +75,7 @@ static void test_core(void) {
     assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,60)==0&&!v.status.armed);
     t=(tof_safety_result_t){7,70,VC_TOF_CLEAR_MM,1,0};vc_tof(&v,&t,70);vc_link(&v,70);vc_step(&v,70,&o);
     assert(v.status.state==VC_STOPPED&&!v.status.armed&&!o.motor_enable); /* cleared, not moving */
+    assert(v.status.reason==VC_TOF_NEAR);                                 /* cause still shown */
     assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,0,0,0,70)==0);
     assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,80)==0&&v.status.armed);
     /* ESTOP stops and stays latched until a board reset, even when every
@@ -125,7 +135,7 @@ static void test_core(void) {
      assert(v.status.reason==VC_AUTO_REFUSED_PATH);
      /* Once the UI synchronizes back to MANUAL, the event is consumed. */
      assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,0,0,0,40)==0);
-     assert(v.status.reason==VC_OPERATOR);}
+     assert(v.status.reason==VC_OK);}
     /* The refusal names the missing prerequisite: no ToF yet, then no M85 link. */
     vc_init(&v,0);wseq=0;vc_link(&v,10);
     assert(web(&v,VC_WEB_MODE,VC_MODE_AUTO,0,0,0,10)==0);
@@ -137,8 +147,14 @@ static void test_core(void) {
     assert(v.status.reason==VC_AUTO_REFUSED_LINK);
     /* Running stops are not refusals. */
     assert(!vc_reason_is_auto_refusal(VC_TOF)&&!vc_reason_is_auto_refusal(VC_LINK)&&!vc_reason_is_auto_refusal(VC_AI));
-    /* ToF acquisition failure invalidates the old reading. */
-    boot(&v);assert(vc_tof(&v,0,40)<0);assert(!v.status.tof_valid&&v.status.state==VC_EMERGENCY);
+    /* ToF acquisition failure invalidates the old reading (emergency while driving). */
+    boot(&v);assert(vc_tof(&v,0,40)<0);assert(!v.status.tof_valid&&v.status.state==VC_STOPPED);
+    boot(&v);assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,30)==0&&v.status.armed);
+    assert(vc_tof(&v,0,40)<0);assert(!v.status.tof_valid&&v.status.state==VC_EMERGENCY&&v.status.reason==VC_TOF);
+    /* Releasing the D-pad is a normal idle, not an abort. */
+    boot(&v);assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,30)==0&&v.status.armed);
+    assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,0,0,0,40)==0&&!v.status.armed&&v.status.reason==VC_OK);
+    assert(web(&v,VC_WEB_STOP,VC_MODE_MANUAL,0,0,0,50)==0&&v.status.reason==VC_OPERATOR);
     vc_init(&v,0xfffffff0U);a=ai(0xffffffffU,0xfffffff0U);assert(vc_ai(&v,&a,0xfffffff0U)==0);
     a=ai(0,5);assert(vc_ai(&v,&a,5)==0); /* seq and clock wrap */
     puts("PASS control: MANUAL boot, D-pad drive/release, no-reverse, web fail-safe, ToF 100mm stop / 50mm emergency + hysteresis, ESTOP latched until reset, AUTO start/stop, wrap");
@@ -402,7 +418,7 @@ static void test_tor(void)
     /* 3. Take-over: MANUAL request -> MANUAL, stopped, D-pad drives again. */
     assert(web(&v,VC_WEB_MODE,VC_MODE_MANUAL,0,0,0,now)==0);
     assert(v.status.state==VC_STOPPED && v.status.mode==VC_MODE_MANUAL && !v.status.armed);
-    assert(v.status.reason==VC_OPERATOR);
+    assert(v.status.reason==VC_OK);                 /* take-over is not an abort */
     assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,now)==0 && v.status.armed && v.status.state==VC_MANUAL);
     /* 4. No answer: exactly at VC_TOR_TIMEOUT_MS -> safe stop, MANUAL, TOR_TIMEOUT. */
     auto_running(&v,&now,&seq); now+=10; lose_path(&v,now,++seq); vc_step(&v,now,&o); t0=now;
@@ -442,11 +458,16 @@ static void test_results(void) {
     a=ai(6,now);assert(vc_ai(&v,&a,now)==VC_INPUT_ACCEPTED);
     a=ai(6,now);assert(vc_ai(&v,&a,now)==VC_INPUT_NOT_NEWER);
     a=ai(7,now);a.path_confidence=2;assert(vc_ai(&v,&a,now)==VC_INPUT_INVALID);
-    /* ToF: stale and malformed samples are both emergencies, with distinct results. */
-    boot(&v);t=(tof_safety_result_t){9,0,500,1,0};
+    /* ToF: stale and malformed samples are both emergencies while driving,
+     * with distinct results (while stopped they are only recorded). */
+    boot(&v);assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,30)==0&&v.status.armed);
+    t=(tof_safety_result_t){9,0,500,1,0};
     assert(vc_tof(&v,&t,VC_TOF_FRESH_MS+50)==VC_INPUT_STALE&&v.status.state==VC_EMERGENCY);
-    boot(&v);t=(tof_safety_result_t){9,30,500,2,0};
+    boot(&v);assert(web(&v,VC_WEB_DRIVE,VC_MODE_MANUAL,1,1000,0,30)==0&&v.status.armed);
+    t=(tof_safety_result_t){9,30,500,2,0};
     assert(vc_tof(&v,&t,30)==VC_INPUT_INVALID&&v.status.state==VC_EMERGENCY);
+    boot(&v);t=(tof_safety_result_t){9,30,500,2,0};
+    assert(vc_tof(&v,&t,30)==VC_INPUT_INVALID&&v.status.state==VC_STOPPED);
     boot(&v);t=(tof_safety_result_t){3,30,500,1,0};assert(vc_tof(&v,&t,30)==VC_INPUT_NOT_NEWER);
     /* Web: out of range INVALID, old timestamp STALE, both stop MANUAL. */
     boot(&v);now=30;

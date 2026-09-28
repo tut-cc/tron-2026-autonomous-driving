@@ -14,9 +14,10 @@ export const StopReasonText = {
     DISTANCE_PRESTOP:    '前方100 mmで通常停止（ToF）',
     BUTTON_EMERGENCY:    'ボタンによる緊急停止（基板リセットで解除）',
     TOR_TIMEOUT:         '引継ぎ時間切れ',
-    MANUAL_ABORT_BUTTON: '手動中断',
+    MANUAL_ABORT_BUTTON: 'ABORT で停止',
     COMM_TIMEOUT:        '通信切断',
-    SENSOR_ERROR:        'センサー異常'
+    SENSOR_ERROR:        '距離センサー(ToF)の値が無効・途絶',
+    INTERNAL_FAULT:      '内部異常で停止（基板リセットが必要）'
 };
 
 export const ObstacleKindText = {

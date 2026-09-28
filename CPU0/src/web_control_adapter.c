@@ -128,6 +128,7 @@ static stop_reason_t response_stop_reason(const vc_status_t *status)
     case VC_AI:       return STOP_REASON_ROAD_UNAVAILABLE; /* bad/stale AI frame in AUTO */
     case VC_TOR_TIMEOUT: return STOP_REASON_TOR_TIMEOUT;
     case VC_TOR_REQUEST: return STOP_REASON_NONE; /* tor_active carries it */
+    case VC_INTERNAL:    return STOP_REASON_INTERNAL_FAULT; /* latched until board reset */
     default:          return STOP_REASON_NONE;
     }
 }
