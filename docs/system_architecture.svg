@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1650" height="760" viewBox="0 0 1650 760" role="img" aria-labelledby="title description">
+  <title id="title">自動運転体験型教材のシステム構成</title>
+  <desc id="description">スマートフォンからルーターを通りM85のWebへ接続する。M85はカメラとAI認識を担い、IPCで操作と認識結果をM33へ渡す。M33はToFを用いて安全状態を判定し、モーター出力をDRV8833へ送る。</desc>
+  <defs>
+    <style>
+      text{font-family:'Yu Gothic','Meiryo',sans-serif;fill:#17253b}
+      .heading{font-size:27px;font-weight:700}
+      .subtitle{font-size:16px;fill:#52647a}
+      .panel-title{font-size:20px;font-weight:700}
+      .box-title{font-size:17px;font-weight:700;text-anchor:middle}
+      .box-sub{font-size:14px;text-anchor:middle;fill:#52647a}
+      .edge-label{font-size:13px;fill:#52647a;text-anchor:middle}
+      .legend{font-size:14px;fill:#52647a}
+      .ext{fill:#f6f8fa;stroke:#8b99a9;stroke-width:2}
+      .blue{fill:#dcebff;stroke:#588fd2;stroke-width:2}
+      .purple{fill:#e8dfff;stroke:#8e72cc;stroke-width:2}
+      .yellow{fill:#fff4d6;stroke:#d6a83c;stroke-width:2}
+      .red{fill:#fde5e5;stroke:#d57272;stroke-width:2}
+      .line{fill:none;stroke:#65758a;stroke-width:2.5;marker-end:url(#arrow)}
+      .wireless-line{fill:none;stroke:#3289b5;stroke-width:2.5;stroke-dasharray:7 5;marker-end:url(#arrow-wifi)}
+      .ipc-line{fill:none;stroke:#c7962f;stroke-width:3;marker-end:url(#arrow-gold)}
+      .return-line{fill:none;stroke:#8e72cc;stroke-width:2.5;marker-end:url(#arrow-purple)}
+      .motor-line{fill:none;stroke:#c95e5e;stroke-width:3;marker-end:url(#arrow-red)}
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#65758a"/></marker>
+    <marker id="arrow-wifi" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#3289b5"/></marker>
+    <marker id="arrow-gold" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#c7962f"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#8e72cc"/></marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,1 L9,5 L0,9 Z" fill="#c95e5e"/></marker>
+  </defs>
+  <rect width="1650" height="760" fill="#fff"/>
+  <text class="heading" x="35" y="49">自動運転体験型教材｜システム構成</text>
+  <text class="subtitle" x="35" y="80">EK-RA8P1 の M85 が認識と Web を担当し、M33 だけがモーターの最終出力を決める</text>
+  <rect x="465" y="125" width="470" height="380" rx="18" fill="#eff6ff" stroke="#8db9ee" stroke-width="2"/>
+  <text class="panel-title" x="485" y="163" fill="#174985">CPU0｜Cortex-M85・μT-Kernel 3.0</text>
+  <rect x="985" y="125" width="430" height="380" rx="18" fill="#f3f0ff" stroke="#a795df" stroke-width="2"/>
+  <text class="panel-title" x="1005" y="163" fill="#5946a0">CPU1｜Cortex-M33・μT-Kernel 3.0</text>
+  <path class="wireless-line" d="M205 258 H245"/>
+  <path class="wireless-line" d="M245 290 H205"/>
+  <path class="line" d="M415 258 H495"/>
+  <path class="line" d="M495 290 H415"/>
+  <path class="line" d="M590 313 V361 H625 V400"/>
+  <path class="line" d="M810 313 V360 H755 V400"/>
+  <path class="ipc-line" d="M810 419.5 H1015"/>
+  <path class="return-line" d="M1015 458.5 H810"/>
+  <path class="line" d="M1102 400 V313"/>
+  <path class="line" d="M1455 274 H1190"/>
+  <path class="motor-line" d="M1169 313 V355 H1297 V400"/>
+  <path class="motor-line" d="M1385 439 H1455"/>
+  <path class="motor-line" d="M1550 478 V525"/>
+  <rect class="ext" x="35" y="235" width="170" height="78" rx="12"/>
+  <text class="box-title" x="120" y="265">スマートフォン / PC</text><text class="box-sub" x="120" y="291">ブラウザ</text>
+  <rect class="ext" x="245" y="235" width="170" height="78" rx="12"/>
+  <text class="box-title" x="330" y="265">Wi-Fi ルーター</text><text class="box-sub" x="330" y="291">無線 / 有線 LAN 中継</text>
+  <text class="edge-label" x="225" y="218" fill="#287699">Wi-Fi（無線）</text>
+  <text class="edge-label" x="455" y="218">Ethernet（有線 LAN）</text>
+  <rect class="blue" x="495" y="235" width="190" height="78" rx="12"/>
+  <text class="box-title" x="590" y="265">Web アプリ / HTTP</text><text class="box-sub" x="590" y="291">lwIP・画面配信・操作受付</text>
+  <rect class="blue" x="715" y="235" width="190" height="78" rx="12"/>
+  <text class="box-title" x="810" y="265">OV5640 / 画像処理・AI</text><text class="box-sub" x="810" y="291">走行路・人・車を認識</text>
+  <rect class="yellow" x="570" y="400" width="240" height="78" rx="12"/>
+  <text class="box-title" x="690" y="430">単一 IPC gateway</text><text class="box-sub" x="690" y="456">操作要求・認識結果 / 状態取得</text>
+  <text class="edge-label" x="913" y="406">操作・認識結果</text><text class="edge-label" x="913" y="481">状態を返信</text>
+  <rect class="yellow" x="1015" y="400" width="175" height="78" rx="12"/>
+  <text class="box-title" x="1102" y="430">M33 側 IPC</text><text class="box-sub" x="1102" y="456">共有 RAM / HSEM</text>
+  <rect class="purple" x="1015" y="235" width="175" height="78" rx="12"/>
+  <text class="box-title" x="1102" y="265">車両状態の正本</text><text class="box-sub" x="1102" y="291">ToF・鮮度・安全判定</text>
+  <rect class="red" x="1210" y="400" width="175" height="78" rx="12"/>
+  <text class="box-title" x="1297" y="430">モーター出力</text><text class="box-sub" x="1297" y="456">M33 の GPIO / PWM</text>
+  <rect class="ext" x="1455" y="235" width="190" height="78" rx="12"/>
+  <text class="box-title" x="1550" y="265">前方 ToF センサ</text><text class="box-sub" x="1550" y="291">VL53L1X</text>
+  <rect class="ext" x="1455" y="400" width="190" height="78" rx="12"/>
+  <text class="box-title" x="1550" y="430">DRV8833</text><text class="box-sub" x="1550" y="456">モータードライバ</text>
+  <rect class="ext" x="1455" y="525" width="190" height="78" rx="12"/>
+  <text class="box-title" x="1550" y="555">左右の DC モーター</text><text class="box-sub" x="1550" y="581">差動二輪</text>
+  <text class="legend" x="35" y="670">青：M85 の認識・通信　｜　紫：M33 の制御・安全判定　｜　黄：コア間 IPC　｜　赤：モーター出力　｜　灰：外部機器</text>
+  <text class="legend" x="35" y="711">人・車の検知は警告に使う。検知だけでは走行モードとモーター出力を変えない。</text>
+</svg>
