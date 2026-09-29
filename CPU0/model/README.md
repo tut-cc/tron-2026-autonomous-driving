@@ -21,12 +21,13 @@ The model contains 80 COCO classes. Firmware postprocessing retains only:
 | 2 | car |
 | 3 | motorcycle |
 
-Source integration and precompiled model:
-`https://github.com/OpenNuvoton/NuMaker-Zephyr-TFLM-ObjectDetection`
+Original model family: `https://github.com/dog-qiuqiu/Yolo-Fastest` (YOLO LICENSE).
+NPU-optimized model source: `https://github.com/OpenNuvoton/NuMaker-Zephyr-TFLM-ObjectDetection`.
 
 The source repository states that the model came from Arm's ML embedded
 evaluation kit and marks its model wrapper and postprocessing as Apache-2.0.
-Review upstream licensing before redistribution.
+The optimized model's redistribution terms remain unconfirmed. The original
+YOLO LICENSE and the wrapper's Apache-2.0 notice do not settle those terms.
 
 Regenerate the embedded C++ array with:
 

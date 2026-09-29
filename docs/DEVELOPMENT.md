@@ -1,6 +1,6 @@
 # 開発者向け：ビルド・書き込み・検証
 
-審査で動かすだけなら、ルートの `README.md` を読めば足ります。この文書はファームを作り直す人向けです。
+この文書はファームを作り直す人向けです。
 
 ## 環境
 
@@ -75,6 +75,6 @@ python -B tools/verify.py --profile dry-run
 
 ## 注意
 
-- M85 のカメラセンサー設定は元プロジェクト由来の `camera_sensor.o`（ソースなし）を使っています。2026-09-28 に配布してよいことを確認し、`CPU0/src/prebuilt/camera_sensor.o` としてリポジトリに含めています（`docs/LICENSE_SURVEY.md` 参照）。
+- M85 のカメラセンサー設定は元プロジェクト由来の `camera_sensor.o`（ソースなし）を使っています。2026-09-28 に配布してよいことを確認し、`CPU0/src/prebuilt/camera_sensor.o` としてリポジトリに含めています（[NOTICE.md](../NOTICE.md) 参照）。
 - PC 上の検査は基板動作の証明ではありません。`MANIFEST.json` の `hardware_verified` は常に `false` です。実機確認は `HARDWARE_TEST.md` の手順で行います。
 - Web 構成の詳細は `M85Web/Application/README_HTTP.md`、通信仕様は `M85Web/Application/mini-4wd-webapp/docs/protocol.md`。
