@@ -56,7 +56,7 @@ python -B tools/verify.py --profile dry-run
 1. **必ずモーター電源（DRV8833 VM）を外し、車輪を浮かせる。**
 2. 本番の書き込みなら、外部ツール `demo_make_evidence` が PASS していることを確認する（開発中の試し書きでは省略可）。
 3. Project Explorerの `CPU0/ra8p1_vision_BothCore_Download.launch` を右クリック → Debug As → `ra8p1_vision_BothCore_Download` を使う（CPU0/CPU1 の ELF を1回で書き込む）。CPU1 単独の Download/Run は使わない（M33 は M85 が起動する）。
-4. 書き込みが終わると CPU0 が Reset_Handler で止まるので F8 で再開し、「実行 → 切断」でデバッガを外す（接続したままだと CPU1 が止まることがある。原因は調査中）。起動構成は ELF をワークスペース相対（`${workspace_loc:/ra8p1_vision_CPU0}` / `..._CPU1`）で指定し、起動前の自動ビルドは無効（検証済みの ELF をそのまま書く）。
+4. 書き込みが終わると CPU0 が Reset_Handler で止まるので F8 で再開し、「実行 → 切断」でデバッガを外す（接続したままだと CPU1 が止まることがある。原因は調査中）。起動構成は ELF をワークスペース相対（`${workspace_loc:/ra8p1_vision_CPU0}` / `..._CPU1`）で指定し、起動前に両コアをビルドします。
 5. 書き込み後はブラウザのタブを開き直す（古い UI を使わない）。
 
 ## デバッガで見る変数
