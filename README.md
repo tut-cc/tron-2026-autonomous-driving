@@ -12,7 +12,7 @@ GitHubから使い始める方は[導入手順](docs/GITHUB_SETUP.md)を、実�
 
 ## デモ動画・紹介資料
 
-[紹介資料（PDF）](docs/autonomous-driving-batontouch.pdf)：作品の目的、システム構成、組み立て・接続、Web画面での操作をまとめています。
+[紹介資料（PowerPoint原本）](docs/autonomous-driving-batontouch.pptx) / [閲覧用PDF](docs/autonomous-driving-batontouch.pdf)：作品の目的、システム構成、組み立て・接続、Web画面での操作をまとめています。
 
 [走行デモ（YouTube）](https://youtu.be/EPq6gM8SDfI)：MANUALモードでの直進・旋回と、AUTOモードでの走行・自動停止を紹介します。
 
