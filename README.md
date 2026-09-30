@@ -318,7 +318,7 @@ AUTO中は方向ボタンが無効になります。
 
 人物や車の検知に使うモデルは、[YOLO-Fastest v1.1](https://github.com/dog-qiuqiu/Yolo-Fastest)を基にしたCOCO 80クラスのモデルです。実際に組み込んでいるのは、[OpenNuvotonの物体検知サンプル](https://github.com/OpenNuvoton/NuMaker-Zephyr-TFLM-ObjectDetection)を取得元とする、Ethos-U NPU向けに最適化されたモデルです。ファイルと変換仕様は[CPU0/model/README.md](CPU0/model/README.md)に記載しています。
 
-YOLO-Fastestの原典には「YOLO LICENSE」があります。ただし、取得元の最適化モデルに適用される再配布条件は、公開リポジトリ上で確認できていません。原典のライセンスが最適化版にもそのまま適用されるとは断定せず、再配布前に取得元の条件を確認してください。
+取得元が示すモデルの出所は[OpenNuvoton/ML_YOLO](https://github.com/OpenNuvoton/ML_YOLO)です。YOLO-Fastestの原典には「YOLO LICENSE」があり、ML_YOLOにはApache-2.0のライセンスと、その表記を持つモデルデータがあります。ただし、現行の最適化モデルと学習済み重みに適用される再配布条件は、まだ確定していません。再配布前に取得元へ確認してください。調査の根拠は[CPU0/model/README.md](CPU0/model/README.md)に記載しています。
 
 ## 安全上の注意と免責
 
